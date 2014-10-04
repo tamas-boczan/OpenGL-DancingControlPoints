@@ -155,7 +155,8 @@ struct ControlPoint
 };
 
 
-class ControlPointList {
+class ControlPointList
+{
     ControlPoint controlPoints [maxControlPoints];
     size_t size;
 
@@ -204,7 +205,8 @@ public:
     }
 } controlPoints;
 
-class Curve {
+class Curve
+{
 protected:
     ControlPointList *cp;
     Vector* curvePoints;
@@ -230,7 +232,8 @@ public:
     }
 };
 
-class DzsCurve : public Curve {
+class DzsCurve : public Curve
+{
     Vector v [maxControlPoints];
     Vector a [maxControlPoints];
 
@@ -818,36 +821,6 @@ void onIdle( )
 {
     float  old_time = currentTime;
     currentTime = glutGet(GLUT_ELAPSED_TIME);		// program inditasa ota eltelt ido
-    /*
-    if (currentTime - clickTime >= 500 && clickState == MOVING && camera.isMoving() == false)
-    {
-        Vector CamStartV = Vector(ConvertX(cursorPosX) - ConvertX(clickPosX),
-                ConvertY(cursorPosY) - ConvertY(clickPosY)
-        );
-        CamStartV = CamStartV * -1.0f / 3.0f;
-        camera.camStart.v = CamStartV;
-        camera.startMoving();
-    }
-    */
-
-    /*
-    if (currentTime - clickTime >= 300)
-    {
-
-        switch(clickState)
-        {
-            case B1UP:
-                onB1CLK();
-                clickState = START;
-                break;
-            case B2UP:
-                onB2CLK();
-                clickState = START;
-                break;
-            default: break;
-        }
-    }
-    */
 
     SimulateWorld(old_time, currentTime);
     glutPostRedisplay();

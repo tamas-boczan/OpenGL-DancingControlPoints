@@ -56,6 +56,8 @@
 #include <GL/gl.h>
 #include <GL/glu.h>
 #include <GL/glut.h>
+#include <stdio.h>
+
 #endif
 
 
@@ -136,6 +138,7 @@ const Color GREY = Color(0.85f, 0.85f, 0.85f);
 const Color TURQUOISE = Color(0.678f, 0.918f, 0.918f);
 const Color RED = Color(1.0f, 0.0f, 0.0f);
 const Color GREEN = Color(0.0f, 0.6f, 0.1f);
+const Color BLUE = Color(0.0f, 0.0f, 1.0f);
 
 
 long currentTime;
@@ -217,6 +220,14 @@ public:
     ~Curve(){
         delete[] curvePoints;
     }
+
+    Vector getCurvePoint(unsigned i){
+        return curvePoints[i];
+    }
+
+    size_t getCurvePointSize(){
+        return curvePointSize;
+    }
 };
 
 class DzsCurve : public Curve {
@@ -282,15 +293,6 @@ private:
 
     void computeV()
     {
-        /*
-        Vector pi = cp -> getP(i);
-        Vector pi1 = cp -> getP(i +1);
-        float ti = cp->getT(i);
-        float ti1 = cp->getT(i + 1);
-        Vector vi = v[i];
-        Vector vi1 = v[i+1];
-        Vector ai = a[i];
-        */
         size_t cpSize = cp->getSize();
         v[cpSize -1] = Vector(0.0f, 0.0f, 0.0f);
         for (unsigned i = 1; i < cpSize - 1; i++) {
@@ -358,7 +360,8 @@ public:
         computeA();
 
         size_t cpSize = cp->getSize();
-        Vector* newCurvePoints = new Vector[(CurvePtNr * (cpSize-1))];
+        curvePointSize = (CurvePtNr * (cpSize-1));
+        Vector* newCurvePoints = new Vector[curvePointSize];
         for (unsigned i = 0; i < (CurvePtNr * (cpSize - 2)); i++)
         {
             if (curvePoints == NULL) break;
@@ -377,9 +380,191 @@ public:
                 );
                 curvePoints[j] = getCurvePos(i, t);
             }
-
     }
-} DzsCurve(&controlPoints);
+
+} dzsCurve(&controlPoints);
+
+class CRSpline: public Curve
+{
+    static const unsigned pointsBetweenControlPoints = 20;
+    //sebesség
+    Vector sebesseg[maxControlPoints];
+    Vector kezdosebesseg;
+    Vector vegsebesseg;
+
+    Vector GetAi2(int elozo)
+    {
+        int i = elozo;
+        Vector p0 = cp->getP(i);
+        Vector p1 = cp->getP(i+1);
+        float t0 = cp->getT(i);
+        float t1 = cp->getT(i + 1);
+        Vector tag1 = (p1 - p0) * 3
+                / pow(t1 - t0, 2);
+        Vector tag2 = (sebesseg[i + 1] + sebesseg[i] * 2)
+                / (t1 - t0);
+
+        return tag1 - tag2;
+    }
+
+    Vector GetAi3(int elozo)
+    {
+        int i = elozo;
+        Vector p0 = cp->getP(i);
+        Vector p1 = cp->getP(i+1);
+        float t0 = cp->getT(i);
+        float t1 = cp->getT(i + 1);
+        Vector tag1 = (p0 - p1) * 2
+                / pow(t1 - t0, 3);
+        Vector tag2 = (sebesseg[i + 1] + sebesseg[i])
+                / pow(t1 - t0, 2);
+
+        return tag1 + tag2;
+    }
+
+public:
+    CRSpline(ControlPointList * controlPointList)
+            : Curve(controlPointList)    // Call the superclass constructor in the subclass' initialization list.
+    {
+        kezdosebesseg = Vector(0.00001, 0.00001, 0.0);
+        vegsebesseg = Vector(0.00001, 0.00001, 0.0);
+    }
+
+    void ComputeV()
+    {
+        sebesseg[0] = kezdosebesseg;
+        sebesseg[cp->getSize() - 1] = vegsebesseg;
+        for (int i = 1; i < cp->getSize() - 1; i++)
+        {
+            Vector p0 = cp->getP(i);
+            Vector pp1 = cp->getP(i + 1);
+            Vector pm1 = cp->getP(i - 1);
+            float t0 = cp->getT(i);
+            float tp1 = cp->getT(i + 1);
+            float tm1 = cp->getT(i - 1);
+
+            Vector tag1 = (pp1 - p0) / (tp1 - t0);
+            Vector tag2 = (p0 - pm1) / (t0 - tm1);
+            sebesseg[i] = tag1 + tag2;
+        }
+    }
+
+    Vector GetPos(float t, int elozo_kontrollpont_szama)
+    {
+        int i = elozo_kontrollpont_szama;
+        Vector ai0 = cp->getP(i);
+        Vector ai1 = sebesseg[i];
+        Vector ai2 = GetAi2(i);
+        Vector ai3 = GetAi3(i);
+
+        float t0 = cp->getT(i);
+
+        return ai3 * pow(t - t0, 3)
+                + ai2 * pow(t - t0, 2)
+                + ai1 * (t - t0)
+                + ai0;
+    }
+
+    Vector GetPos(float t)
+    {
+        int index=0;
+        for (int i = 0; cp->getT(i) < t; i++)
+            index = i;
+        return GetPos(t, index);
+    }
+
+    Vector derivaltPos(float t, int elozo_kontrollpont_szama)
+    {
+        int i = elozo_kontrollpont_szama;
+        Vector ai1 = sebesseg[i];
+        Vector ai2 = GetAi2(i);
+        Vector ai3 = GetAi3(i);
+
+        return ai3 * pow(t - cp->getT(i), 2) * 3
+                + ai2 * (t - cp->getT(i)) * 2
+                + ai1;
+    }
+
+    Vector Tangencialis(float t, int index)
+    {
+        Vector T = derivaltPos(t, index);
+        return T.normalized();
+    }
+
+    Vector Binormalis(float t, int index)
+    {
+        Vector B = Tangencialis(t, index) % Vector(1, 0, 0);
+        return B.normalized();
+    }
+
+    Vector Normal(float t, int index)
+    {
+        Vector N = Tangencialis(t, index) % Binormalis(t, index);
+        return N.normalized();
+    }
+
+    void computeCurve() {
+        size_t cpSize = cp->getSize();
+        unsigned points = pointsBetweenControlPoints;
+        curvePointSize = points * (cpSize - 1);
+        Vector* newCurvePoints = new Vector[curvePointSize];
+        delete [] curvePoints;
+        curvePoints = newCurvePoints;
+
+        ComputeV();
+        for (unsigned i = 0; i < cpSize -1; i++)
+            for (unsigned j = i * points; j < (i+1) * points; j++)
+            {
+                float t = cp->getT(i) + (
+                        ((cp->getT(i+1) - cp->getT(i)) / (float)points) * (j - (i * (float)points))
+                );
+                curvePoints[j] = GetPos(t, i);
+            }
+    }
+} crSpline(&controlPoints);
+
+
+class BezierCurve : public Curve
+{
+    static const unsigned resolution = 400;
+
+    // t = [0-1] tartom�ny k�z�tt, i=m=kpMax-1
+    Vector CountBezierPos(float t, int i, int m)
+    {
+        if (m == 0)
+            return cp->getP(i);
+
+        return CountBezierPos(t, i - 1, m - 1) * t +
+                CountBezierPos(t, i, m - 1) * (1.0 - t);
+    }
+
+public:
+    BezierCurve (ControlPointList * controlPointList)
+            : Curve(controlPointList){
+        curvePoints = new Vector[resolution + 1];
+        curvePointSize = 0;
+    };
+
+    //Bezier nincs sulyozva!
+    Vector GetPos(float t)
+    {
+        return CountBezierPos(t, cp->getSize() - 1, cp->getSize() - 1);
+    }
+
+    void computeCurve() {
+        float firstT = cp->getT(0);
+        float lastT = cp->getT(cp->getSize() - 1);
+        float range = lastT - firstT;
+        int i = 0;
+        for (float t = firstT; t < lastT; t += range / (float) resolution) {
+            float t1 = (t - firstT) / range;
+            curvePoints[i] = GetPos(t1);
+            curvePointSize = i;
+            i++;
+        }
+    }
+
+} bezier(&controlPoints);
 
 class Camera
 {
@@ -535,12 +720,27 @@ void onDisplay( )
     for (unsigned i = 0; i < controlPoints.getSize(); i++)
         DrawCircle(controlPoints.getP(i), 2.0f);
 
-    glColor3f(GREEN.r, GREEN.g, GREEN.b);
-    if (controlPoints.getSize() >=3)
+
+    if (controlPoints.getSize() >= 2)
     {
+        /*
+        glColor3f(BLUE.r, BLUE.g, BLUE.b);
         glBegin(GL_LINE_STRIP);
-        for (unsigned i = 0; i < (controlPoints.getSize() - 1) * DzsCurve.CurvePtNr; i++)
-            glVertex2f(DzsCurve.getCurvePoint(i).x, DzsCurve.getCurvePoint(i).y);
+        for (unsigned i = 0; i < dzsCurve.getCurvePointSize(); i++)
+            glVertex2f(dzsCurve.getCurvePoint(i).x, dzsCurve.getCurvePoint(i).y);
+        glEnd();
+        */
+
+        glColor3f(RED.r, RED.g, RED.b);
+        glBegin(GL_LINE_STRIP);
+        for (unsigned i = 0; i < bezier.getCurvePointSize(); i++)
+            glVertex2f(bezier.getCurvePoint(i).x, bezier.getCurvePoint(i).y);
+        glEnd();
+
+        glColor3f(GREEN.r, GREEN.g, GREEN.b);
+        glBegin(GL_LINE_STRIP);
+        for (unsigned i = 0; i < crSpline.getCurvePointSize(); i++)
+            glVertex2f(crSpline.getCurvePoint(i).x, crSpline.getCurvePoint(i).y);
         glEnd();
     }
 
@@ -581,8 +781,12 @@ void onMouse(int button, int state, int x, int y)
             if (controlPoints.getSize() < maxControlPoints)
             {
                 controlPoints.add(pos, clickTime/1000.0f);
-                if (controlPoints.getSize() >= 3)
-                    DzsCurve.computeCurve();
+                if (controlPoints.getSize() >= 2) {
+                    dzsCurve.computeCurve();
+                    crSpline.computeCurve();
+                    bezier.computeCurve();
+                }
+
                 glutPostRedisplay();
             }
         }

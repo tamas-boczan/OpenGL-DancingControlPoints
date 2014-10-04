@@ -127,6 +127,8 @@ struct Color {
 const int screenWidth = 600;	// alkalmazás ablak felbontása
 const int screenHeight = 600;
 
+const size_t maxControlPoints = 10;
+
 // színek
 const Color BLACK = Color(0.0f, 0.0f, 0.0f);
 const Color GREY = Color(0.85f, 0.85f, 0.85f);
@@ -146,10 +148,238 @@ enum possibleStates{ADDING_POINTS, CIRCULATE, CAMERA_MOVING} currentSate;
 struct ControlPoint
 {
     Vector p;
-    Vector a;
-    Vector v;
     float t;
 };
+
+
+class ControlPointList {
+    ControlPoint controlPoints [maxControlPoints];
+    size_t size;
+
+public:
+
+    ControlPointList(size_t size = 0) : size(size) {
+    }
+
+    Vector getP(unsigned i)
+    {
+        return  controlPoints[i].p;
+    }
+
+    void setP(unsigned i, Vector Position)
+    {
+        controlPoints[i].p = Position;
+    }
+
+    float getT(unsigned i)
+    {
+        return controlPoints[i].t;
+    }
+
+    void setT(unsigned i, float weight)
+    {
+        controlPoints[i].t = weight;
+    }
+
+    size_t getSize() {
+        return size;
+    }
+
+    void add(ControlPoint cp) {
+        if (size < maxControlPoints) {
+            controlPoints[size] = cp;
+            size++;
+        }
+    }
+
+    void add(Vector p, float t) {
+        if (size < maxControlPoints) {
+            controlPoints[size].p = p;
+            controlPoints[size].t = t;
+            size++;
+        }
+    }
+} controlPoints;
+
+class Curve {
+protected:
+    ControlPointList *cp;
+    Vector* curvePoints;
+    size_t curvePointSize;
+
+public:
+    Curve (ControlPointList * controlPoints){
+        cp = controlPoints;
+        curvePoints = NULL;
+        curvePointSize = 0;
+    }
+
+    ~Curve(){
+        delete[] curvePoints;
+    }
+};
+
+class DzsCurve : public Curve {
+    Vector v [maxControlPoints];
+    Vector a [maxControlPoints];
+
+public:
+    DzsCurve(ControlPointList *controlPoints) : Curve(controlPoints) {
+    }
+
+    static const unsigned CurvePtNr = 20;
+
+private:
+
+    Vector a0(int i)
+    {
+        return cp->getP(i);
+    }
+
+    Vector a1(int i)
+    {
+        return v[i];
+    }
+
+    Vector a2(int i)
+    {
+        return a[i] / 2.0f;
+    }
+
+    Vector a3(int i)
+    {
+        Vector pi = cp -> getP(i);
+        Vector pi1 = cp -> getP(i +1);
+        float ti = cp->getT(i);
+        float ti1 = cp->getT(i + 1);
+        Vector vi = v[i];
+        Vector vi1 = v[i+1];
+        Vector ai = a[i];
+
+        return (
+                ((pi1 * 4.0f - pi * 4.0f) / (pow(ti1 - ti, 3)))
+              - ((vi1 + vi * 3.0f) / (pow(ti1 - ti, 2)))
+                - (ai / (ti1 - ti))
+        );
+    }
+
+    Vector a4(int i)
+    {
+        Vector pi = cp -> getP(i);
+        Vector pi1 = cp -> getP(i +1);
+        float ti = cp->getT(i);
+        float ti1 = cp->getT(i + 1);
+        Vector vi = v[i];
+        Vector vi1 = v[i+1];
+        Vector ai = a[i];
+
+        return (
+                (((pi1 * (-3.0f)) + (pi * 3.0f)) / (pow((ti1 - ti), 4)))
+                        + ((vi1 + (vi * 2.0f)) / (pow((ti1 - ti),3)))
+                        + ((ai *0.5f) / (pow((ti1 - ti), 2)))
+        );
+    }
+
+    void computeV()
+    {
+        /*
+        Vector pi = cp -> getP(i);
+        Vector pi1 = cp -> getP(i +1);
+        float ti = cp->getT(i);
+        float ti1 = cp->getT(i + 1);
+        Vector vi = v[i];
+        Vector vi1 = v[i+1];
+        Vector ai = a[i];
+        */
+        size_t cpSize = cp->getSize();
+        v[cpSize -1] = Vector(0.0f, 0.0f, 0.0f);
+        for (unsigned i = 1; i < cpSize - 1; i++) {
+            Vector pi = cp -> getP(i);
+            Vector pim = cp -> getP(i - 1);
+            Vector pip = cp -> getP(i + 1);
+            float ti = cp->getT(i);
+            float tim = cp->getT(i - 1);
+            float tip = cp->getT(i + 1);
+
+            v[i] = (
+                    ((pi - pim) / (ti - tim)) +
+                    ((pip - pi) / (tip - ti))
+            ) / 2.0f;
+        }
+    }
+
+    void computeA() {
+        for (unsigned i = 0; i < cp->getSize() -1; i++)
+        {
+            float ti = cp->getT(i);
+            float tip = cp->getT(i + 1);
+            a[i + 1] = (a4(i) * 12.0f * (pow((tip - ti),2))) +
+                    (a3(i) *  6.0f * (tip - ti)) +
+                    (a2(i) *  2.0f);
+        }
+    }
+
+    size_t findCP(float t)
+    {
+        for(unsigned i = 1; i < cp->getSize(); i++)
+            if (cp->getT(i) > t)
+                return i-1;
+        return cp->getSize()-1;
+    }
+
+public:
+    Vector getCurvePos(unsigned previousControlPointIndex, float weight)
+    {
+        unsigned i = previousControlPointIndex;
+        float t = weight;
+        float ti = cp->getT(i);
+
+        return	(a4(i) * pow((t-ti),4)) +
+                (a3(i) * pow((t-ti),3)) +
+                (a2(i) * pow((t-ti),2)) +
+                (a1(i) * (t-ti)) +
+                a0(i);
+    }
+
+    Vector getCurvePos(float weight)
+    {
+        int previousControlPointIndex = findCP(weight);
+        return getCurvePos(previousControlPointIndex, weight);
+    }
+
+    Vector getCurvePoint(int i)
+    {
+        return curvePoints[i];
+    }
+
+    void computeCurve()
+    {
+        computeV();
+        computeA();
+
+        size_t cpSize = cp->getSize();
+        Vector* newCurvePoints = new Vector[(CurvePtNr * (cpSize-1))];
+        for (unsigned i = 0; i < (CurvePtNr * (cpSize - 2)); i++)
+        {
+            if (curvePoints == NULL) break;
+            else newCurvePoints[i] = curvePoints[i];
+        }
+        delete [] curvePoints;
+        curvePoints = newCurvePoints;
+
+        for (unsigned i = 0; i < cp->getSize() -1; i++)
+            for (unsigned j = i * CurvePtNr; j < (i+1) * CurvePtNr; j++)
+            {
+                float ti = cp->getT(i);
+                float tip = cp->getT(i + 1);
+                float t = ti + (
+                        ((tip - ti) / (float)CurvePtNr) * (j - (i * (float)CurvePtNr))
+                );
+                curvePoints[j] = getCurvePos(i, t);
+            }
+
+    }
+} DzsCurve(&controlPoints);
 
 class Camera
 {
@@ -234,201 +464,6 @@ public:
 
 } camera;
 
-class Curve
-{
-public:
-    static const unsigned MaxCtrlPts = 100;
-    static const unsigned CurvePtNr = 20;
-
-private:
-
-    ControlPoint* cp;
-    Vector* CurvePoints;
-    size_t cpSize;
-
-    Vector a0(int i)
-    {
-        return cp[i].p;
-    }
-
-    Vector a1(int i)
-    {
-        return cp[i].v;
-    }
-
-    Vector a2(int i)
-    {
-        return cp[i].a / 2.0f;
-    }
-
-    Vector a3(int i)
-    {
-
-        return (
-                ((cp[i+1].p * 4.0f - cp[i].p * 4.0f) / (pow((cp[i+1].t - cp[i].t), 3)))
-                        - ((cp[i+1].v + cp[i].v * 3.0f) / (pow((cp[i+1].t - cp[i].t), 2)))
-                        - (cp[i].a / (cp[i+1].t - cp[i].t))
-        );
-    }
-
-    Vector a4(int i)
-    {
-        return (
-                (((cp[i+1].p * (-3.0f)) + (cp[i].p * 3.0f)) / (pow((cp[i+1].t - cp[i].t), 4)))
-                        + ((cp[i+1].v + (cp[i].v * 2.0f)) / (pow((cp[i+1].t - cp[i].t),3)))
-                        + ((cp[i].a *0.5f) / (pow((cp[i+1].t - cp[i].t), 2)))
-        );
-    }
-
-    void computeV()
-    {
-        cp[cpSize-1].v = Vector(0.0f, 0.0f, 0.0f);
-        for (unsigned i = 1; i < cpSize - 1; i++)
-            cp[i].v = (
-                    ((cp[i].p - cp[i-1].p) / (cp[i].t - cp[i-1].t)) +
-                            ((cp[i+1].p - cp[i].p) / (cp[i+1].t - cp[i].t))
-            ) / 2.0f;
-    }
-
-    void computeA()
-    {
-        for (unsigned i = 0; i < cpSize -1; i++)
-        {
-
-            cp[i+1].a = (a4(i) * 12.0f * (pow((cp[i+1].t - cp[i].t),2))) +
-                    (a3(i) *  6.0f * (cp[i+1].t - cp[i].t)) +
-                    (a2(i) *  2.0f);
-        }
-    }
-
-
-    int findCP(float t)
-    {
-        for(unsigned i = 1; i < cpSize; i++)
-            if (cp[i].t > t)
-                return i-1;
-        return cpSize-1;
-    }
-public:
-    Curve()
-    {
-        cp = NULL;
-        CurvePoints = NULL;
-        cpSize=0;
-    }
-
-    ~Curve()
-    {
-        delete[] cp;
-        delete[] CurvePoints;
-    }
-
-    size_t getCpNr()
-    {
-        return cpSize;
-    }
-
-    Vector getP(unsigned i)
-    {
-        return  cp[i].p;
-    }
-
-    float getT(unsigned i)
-    {
-        return cp[i].t;
-    }
-
-    float getLastT()
-    {
-        return cp[cpSize-1].t;
-    }
-
-    void setP(unsigned i, Vector Position)
-    {
-        cp[i].p = Position;
-    }
-
-    void setT(unsigned i, float weight)
-    {
-        cp[i].t = weight;
-    }
-
-    void setV(unsigned i, Vector Velocity)
-    {
-        cp[i].v = Velocity;
-    }
-
-    void setA(unsigned i, Vector Acceleration)
-    {
-        cp[i].a = Acceleration;
-    }
-
-    void addCP(Vector Position, float weight)
-    {
-        ControlPoint* newcp = new ControlPoint[cpSize+1];
-        for (unsigned i = 0; i < cpSize; i++)
-            newcp[i] = cp[i];
-        newcp[cpSize].p = Position;
-        newcp[cpSize].t = weight;
-        delete [] cp;
-        cp = newcp;
-
-        cpSize++;
-        if (cpSize >= 3)
-        {
-            Vector* newCurvePoints = new Vector[(CurvePtNr * (cpSize-1))];
-            for (unsigned i = 0; i < (CurvePtNr * (cpSize - 2)); i++)
-            {
-                if (CurvePoints == NULL) break;
-                else newCurvePoints[i] = CurvePoints[i];
-            }
-            delete [] CurvePoints;
-            CurvePoints = newCurvePoints;
-        }
-    }
-
-    Vector getCurvePos(int previousControlPointIndex, float weight)
-    {
-        int i = previousControlPointIndex;
-        float t = weight;
-
-        return	(a4(i) * pow((t-cp[i].t),4)) +
-                (a3(i) * pow((t-cp[i].t),3)) +
-                (a2(i) * pow((t-cp[i].t),2)) +
-                (a1(i) * (t-cp[i].t)) +
-                a0(i);
-    }
-
-    Vector getCurvePos(float weight)
-    {
-        int previousControlPointIndex = findCP(weight);
-        return getCurvePos(previousControlPointIndex, weight);
-    }
-
-    Vector getCurvePoint(int i)
-    {
-        return CurvePoints[i];
-    }
-
-    void computeCurve()
-    {
-        computeV();
-        computeA();
-
-
-        for (unsigned i = 0; i < cpSize -1; i++)
-            for (unsigned j = i * CurvePtNr; j < (i+1) * CurvePtNr; j++)
-            {
-                float t = cp[i].t + (
-                        ((cp[i+1].t - cp[i].t) / (float)CurvePtNr) * (j - (i * (float)CurvePtNr))
-                );
-                CurvePoints[j] = getCurvePos(i, t);
-
-            }
-
-    }
-} DzsCurve;
-
 float ConvertX (int x)
 {
     return (float) (camera.left() + ((float)x / screenWidth * 100.0f));
@@ -444,6 +479,7 @@ void onInitialization( )
 {
     glViewport(0, 0, screenWidth, screenHeight);
     currentSate = ADDING_POINTS;
+
 }
 
 void DrawCircle(Vector Center, float radius)
@@ -480,7 +516,7 @@ void SimulateWorld(float tstart, float tend)
 
     if (currentSate == CAMERA_MOVING)
         for (float ts = tstart; ts < tend; ts += dt) {
-            moveCamera(DzsCurve.getP(followedControlPoint));
+            moveCamera(controlPoints.getP(followedControlPoint));
         }
 }
 
@@ -496,14 +532,14 @@ void onDisplay( )
     gluOrtho2D(camera.left(), camera.right(), camera.bottom(), camera.top());
 
     glColor3f(BLACK.r, BLACK.g, BLACK.b);
-    for (unsigned i = 0; i < DzsCurve.getCpNr(); i++)
-        DrawCircle(DzsCurve.getP(i), 2.0f);
+    for (unsigned i = 0; i < controlPoints.getSize(); i++)
+        DrawCircle(controlPoints.getP(i), 2.0f);
 
     glColor3f(GREEN.r, GREEN.g, GREEN.b);
-    if (DzsCurve.getCpNr() >=3)
+    if (controlPoints.getSize() >=3)
     {
         glBegin(GL_LINE_STRIP);
-        for (unsigned i = 0; i < (DzsCurve.getCpNr()-1) * DzsCurve.CurvePtNr; i++)
+        for (unsigned i = 0; i < (controlPoints.getSize() - 1) * DzsCurve.CurvePtNr; i++)
             glVertex2f(DzsCurve.getCurvePoint(i).x, DzsCurve.getCurvePoint(i).y);
         glEnd();
     }
@@ -542,10 +578,10 @@ void onMouse(int button, int state, int x, int y)
         // felvesz egy új kontrollpontot és újraszámolja a görbét, de csak a pontfelvétel állapotában, ha még nem értük el a maxot
         if (currentSate == ADDING_POINTS){
             Vector pos = Vector (ConvertX(x),  ConvertY(y));
-            if (DzsCurve.getCpNr() < DzsCurve.MaxCtrlPts)
+            if (controlPoints.getSize() < maxControlPoints)
             {
-                DzsCurve.addCP(pos, clickTime/1000.0f);
-                if (DzsCurve.getCpNr() >= 3)
+                controlPoints.add(pos, clickTime/1000.0f);
+                if (controlPoints.getSize() >= 3)
                     DzsCurve.computeCurve();
                 glutPostRedisplay();
             }

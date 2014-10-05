@@ -154,56 +154,216 @@ struct ControlPoint
     float t;
 };
 
-
 class ControlPointList
 {
-    ControlPoint controlPoints [maxControlPoints];
+    ControlPoint** controlPoints;
     size_t size;
 
 public:
 
     ControlPointList(size_t size = 0) : size(size) {
+        controlPoints = new ControlPoint*[maxControlPoints];
+    }
+
+    ControlPointList (const ControlPointList &c2)
+    {
+        controlPoints = new ControlPoint*[maxControlPoints];
+        size = c2.size;
+        for (int i = 0; i < size; i++) {
+            controlPoints[i] = c2.controlPoints[i];
+        }
+    }
+
+    void deleteControlPoints()
+    {
+        delete[] controlPoints;
+        controlPoints = NULL;
+    }
+
+    ControlPoint * getControlPoint(unsigned i) {
+        return controlPoints[i];
+    }
+
+    void setControlPoint(unsigned i, ControlPoint * cp){
+        controlPoints[i] = cp;
     }
 
     Vector getP(unsigned i)
     {
-        return  controlPoints[i].p;
+        return controlPoints[i]-> p;
     }
 
     void setP(unsigned i, Vector Position)
     {
-        controlPoints[i].p = Position;
+        controlPoints[i] -> p = Position;
     }
 
     float getT(unsigned i)
     {
-        return controlPoints[i].t;
+        return controlPoints[i] -> t;
     }
 
     void setT(unsigned i, float weight)
     {
-        controlPoints[i].t = weight;
+        controlPoints[i] -> t = weight;
     }
 
     size_t getSize() {
         return size;
     }
 
-    void add(ControlPoint cp) {
+    void add(ControlPoint * cp) {
         if (size < maxControlPoints) {
             controlPoints[size] = cp;
             size++;
         }
     }
 
-    void add(Vector p, float t) {
+    void add(Vector _p, float _t) {
         if (size < maxControlPoints) {
-            controlPoints[size].p = p;
-            controlPoints[size].t = t;
-            size++;
+            ControlPoint *cp = new ControlPoint;
+            cp->p = _p;
+            cp->t = _t;
+            add(cp);
         }
     }
-} controlPoints;
+
+    void removeLastReference() {
+        size--;
+    }
+
+    void clear() {
+        size = 0;
+    }
+};
+
+ControlPointList currentControlPoints;
+ControlPointList originalControlPoints;
+ControlPointList convexHull;
+
+/*
+int findLowestControlPoint (ControlPointList * currentControlPoints){
+    int lowestIndex;
+    float lowestY = 9999999999999;
+    for (unsigned i = 0; i < currentControlPoints->getSize(); i++){
+        float currentY = currentControlPoints->getControlPoint(i).p.y;
+        if (currentY < lowestY){
+            lowestY = currentY;
+            lowestIndex = i;
+        }
+    }
+    return lowestIndex;
+}
+*/
+
+bool isCounterClockWise (Vector p1, Vector p2, Vector p3) {
+    Vector side1 = p2 - p1;
+    Vector side2 = p3 - p1;
+    Vector meroleges = side1 % side2;
+    float direction = meroleges.z;
+    return (direction <= 0.0);
+}
+
+bool isLeftFrom (Vector v1, Vector v2){
+    if (v1.x < v2.x)
+        return true;
+    if (v1.x > v2.x)
+        return false;
+    return (v1.y < v2.y);
+}
+
+void sortControlPointsByX(ControlPointList * cpList){
+    size_t n = cpList->getSize();
+    for (size_t c = 0 ; c < ( n - 1 ); c++) {
+        for (size_t d = 0; d < n - c - 1; d++) {
+            if (isLeftFrom(cpList->getP(d + 1), cpList->getP(d))) {
+                ControlPoint *temp = cpList->getControlPoint(d);
+                cpList->setControlPoint(d, cpList->getControlPoint(d + 1));
+                cpList->setControlPoint(d + 1, temp);
+            }
+        }
+    }
+}
+
+
+// Returns a list of points on the convex hull in counter-clockwise order.
+// Note: the last point in the returned list is the same as the first one.
+ControlPointList findConvexHull (ControlPointList currentControlPoints){
+    ControlPointList orderedCp(currentControlPoints);
+    sortControlPointsByX(&orderedCp);
+
+    ControlPointList lowerHull;
+    for (int i = 0; i < orderedCp.getSize(); i++){
+        size_t hullSize = lowerHull.getSize();
+        while (hullSize >= 2 && !isCounterClockWise(lowerHull.getP(hullSize - 2), lowerHull.getP(hullSize - 1), orderedCp.getP(i))) {
+            lowerHull.removeLastReference();
+            hullSize = lowerHull.getSize();
+        }
+        lowerHull.add(orderedCp.getControlPoint(i));
+    }
+
+    /*
+    for i = n, n-1, ..., 1:
+    while U contains at least two points and the sequence of last two points
+            of U and the point P[i] does not make a counter-clockwise turn:
+        remove the last point from U
+    append P[i] to U
+     */
+    ControlPointList upperHull;
+    for (int i = orderedCp.getSize() - 1; i > 0; i--){
+        size_t hullSize = upperHull.getSize();
+        while (hullSize >= 2 && !isCounterClockWise(upperHull.getP(hullSize - 2), upperHull.getP(hullSize - 1), orderedCp.getP(i))) {
+            upperHull.removeLastReference();
+            hullSize = upperHull.getSize();
+        }
+        upperHull.add(orderedCp.getControlPoint(i));
+    }
+
+    /*
+    Remove the last point of each list (it's the same as the first point of the other list).
+    Concatenate L and U to obtain the convex hull of P.
+    Points in the result will be listed in counter-clockwise order.
+     */
+    if (lowerHull.getControlPoint(lowerHull.getSize() - 1) ==
+            upperHull.getControlPoint(0))
+        lowerHull.removeLastReference();
+
+    if (upperHull.getControlPoint(upperHull.getSize() - 1) ==
+            lowerHull.getControlPoint(0))
+        upperHull.removeLastReference();
+
+    convexHull.clear();
+    for (int i = 0; i < lowerHull.getSize(); i++)
+        convexHull.add(lowerHull.getControlPoint(i));
+    for (int i = 0; i < upperHull.getSize(); i++)
+        convexHull.add(upperHull.getControlPoint(i));
+}
+
+
+/*
+int* findConvexHull (ControlPointList * currentControlPoints){
+    bool usedCP[currentControlPoints->getSize()];
+    for (int i = 0; i < currentControlPoints->getSize(); i++)
+        usedCP = false;
+
+    // legalsó kontrollpont
+    int nextIndex = findLowestControlPoint(currentControlPoints);
+    convexHullIndexes[0] = nextIndex;
+    convexHullSize = 1;
+    usedCP[nextIndex] = true;
+
+    //egyik oldalról záró kontrollpontok keresése
+    bool found = false;
+    int lastIndex = convexHullIndexes[convexHullSize - 1];
+    for (int i = 0; i < currentControlPoints->getSize(); i++)
+        if (!usedCP[i]){
+            // last - i egyenes
+            Vector lineV = currentControlPoints->getP(lastIndex) - currentControlPoints->getP(i);
+            Vector lineP = currentControlPoints->getP(lastIndex);
+            // ellenőrzi, hogy minden pont vagy balra vagy jobbra van-e ettől az egyenestől
+        }
+}
+*/
 
 class Curve
 {
@@ -221,6 +381,7 @@ public:
 
     ~Curve(){
         delete[] curvePoints;
+        cp->deleteControlPoints();
     }
 
     Vector getCurvePoint(unsigned i){
@@ -385,7 +546,7 @@ public:
             }
     }
 
-} dzsCurve(&controlPoints);
+} dzsCurve(&currentControlPoints);
 
 class CRSpline: public Curve
 {
@@ -524,7 +685,7 @@ public:
                 curvePoints[j] = GetPos(t, i);
             }
     }
-} crSpline(&controlPoints);
+} crSpline(&currentControlPoints);
 
 
 class BezierCurve : public Curve
@@ -567,7 +728,7 @@ public:
         }
     }
 
-} bezier(&controlPoints);
+} bezier(&currentControlPoints);
 
 class Camera
 {
@@ -583,6 +744,9 @@ public:
         allowYMove = false;
         originalBottomLeft = bottomLeft = Vector(100.0f, 300.0f);
         originalTopRight = topRight = Vector(200.0f, 400.0f);
+
+        // originalBottomLeft = bottomLeft = Vector(50.0f, 50.0f);
+        // originalTopRight = topRight = Vector(108.0f, 118.0f);
     }
 
     double left(){
@@ -704,7 +868,7 @@ void SimulateWorld(float tstart, float tend)
 
     if (currentSate == CAMERA_MOVING)
         for (float ts = tstart; ts < tend; ts += dt) {
-            moveCamera(controlPoints.getP(followedControlPoint));
+            moveCamera(currentControlPoints.getP(followedControlPoint));
         }
 }
 
@@ -719,20 +883,13 @@ void onDisplay( )
     glLoadIdentity();
     gluOrtho2D(camera.left(), camera.right(), camera.bottom(), camera.top());
 
-    glColor3f(BLACK.r, BLACK.g, BLACK.b);
-    for (unsigned i = 0; i < controlPoints.getSize(); i++)
-        DrawCircle(controlPoints.getP(i), 2.0f);
-
-
-    if (controlPoints.getSize() >= 2)
+    if (currentControlPoints.getSize() >= 2)
     {
-        /*
-        glColor3f(BLUE.r, BLUE.g, BLUE.b);
-        glBegin(GL_LINE_STRIP);
-        for (unsigned i = 0; i < dzsCurve.getCurvePointSize(); i++)
-            glVertex2f(dzsCurve.getCurvePoint(i).x, dzsCurve.getCurvePoint(i).y);
+        glColor3f(TURQUOISE.r, TURQUOISE.g, TURQUOISE.b);
+        glBegin(GL_TRIANGLE_FAN);
+        for (unsigned i = 0; i < convexHull.getSize(); i++)
+            glVertex2f(convexHull.getP(i).x, convexHull.getP(i).y);
         glEnd();
-        */
 
         glColor3f(RED.r, RED.g, RED.b);
         glBegin(GL_LINE_STRIP);
@@ -745,6 +902,16 @@ void onDisplay( )
         for (unsigned i = 0; i < crSpline.getCurvePointSize(); i++)
             glVertex2f(crSpline.getCurvePoint(i).x, crSpline.getCurvePoint(i).y);
         glEnd();
+
+        glColor3f(BLACK.r, BLACK.g, BLACK.b);
+        for (unsigned i = 0; i < currentControlPoints.getSize(); i++)
+            DrawCircle(currentControlPoints.getP(i), 2.0f);
+    }
+
+    else {
+        glColor3f(BLACK.r, BLACK.g, BLACK.b);
+        for (unsigned i = 0; i < currentControlPoints.getSize(); i++)
+            DrawCircle(currentControlPoints.getP(i), 2.0f);
     }
 
     glutSwapBuffers();     				// Buffercsere: rajzolas vege
@@ -781,13 +948,14 @@ void onMouse(int button, int state, int x, int y)
         // felvesz egy új kontrollpontot és újraszámolja a görbét, de csak a pontfelvétel állapotában, ha még nem értük el a maxot
         if (currentSate == ADDING_POINTS){
             Vector pos = Vector (ConvertX(x),  ConvertY(y));
-            if (controlPoints.getSize() < maxControlPoints)
+            if (currentControlPoints.getSize() < maxControlPoints)
             {
-                controlPoints.add(pos, clickTime/1000.0f);
-                if (controlPoints.getSize() >= 2) {
+                currentControlPoints.add(pos, clickTime/1000.0f);
+                if (currentControlPoints.getSize() >= 2) {
                     dzsCurve.computeCurve();
                     crSpline.computeCurve();
                     bezier.computeCurve();
+                    findConvexHull(currentControlPoints);
                 }
 
                 glutPostRedisplay();

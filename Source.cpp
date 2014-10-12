@@ -131,6 +131,7 @@ const int screenHeight = 600;
 
 const size_t maxControlPoints = 10;
 const size_t curveResolution = 200;
+const float radius = 2.0;
 
 // színek
 const Color BLACK = Color(0.0f, 0.0f, 0.0f);
@@ -145,7 +146,6 @@ const Color BLUE = Color(0.0f, 0.0f, 1.0f);
 long currentTime;
 long clickTime;
 long circulationStartTime;
-unsigned int followedControlPoint;
 
 enum possibleStates{ADDING_POINTS, CIRCULATE, CAMERA_MOVING} currentSate;
 
@@ -167,7 +167,6 @@ class ControlPointList
 public:
 
     ControlPointList(size_t size = 0) : size(size) {
-
     }
 
     ControlPointList (const ControlPointList &c2)
@@ -180,6 +179,15 @@ public:
 
     ControlPoint * getControlPoint(unsigned i) {
         return controlPoints[i];
+    }
+
+    ControlPoint * getControlPointAtPos(Vector p) {
+        for (int i = 0; i < size; i++){
+            Vector distance = p - controlPoints[i]->p;
+            if (distance.Length() < radius)
+                return controlPoints[i];
+        }
+        return NULL;
     }
 
     void setControlPoint(unsigned i, ControlPoint * cp){
@@ -248,6 +256,8 @@ public:
 
 ControlPointList currentControlPoints;
 ControlPointList convexHull;
+ControlPoint * followedControlPoint;
+Vector followStartPoint;
 
 class ConvexHullFinder {
     bool isCounterClockWise (Vector p1, Vector p2, Vector p3) {
@@ -335,7 +345,6 @@ public:
         return monotoneChain(currentControlPoints);
     }
 } convexHullFinder;
-
 
 class Curve
 {
@@ -505,7 +514,6 @@ public:
     }
 } crSpline(&currentControlPoints);
 
-
 class BezierCurve : public Curve
 {
     // t = [0-1] tartomany kozott, i=m=kpMax-1
@@ -548,22 +556,14 @@ public:
 
 class Camera
 {
-    Vector bottomLeft, topRight;
-    Vector originalBottomLeft, originalTopRight;
+    static const float windowWidth = 58;
+    static const float windowHeight = 68;
+    Vector bottomLeft, topRight, originalBottomLeft, originalTopRight;
 public:
     Camera()
     {
-
         originalBottomLeft = bottomLeft = Vector(21.0f, 16.0f);
-        originalTopRight = topRight = bottomLeft + Vector(58.0f, 68.0f);
-    }
-
-    float width() {
-        return topRight.x - bottomLeft.x;
-    }
-
-    float height() {
-        return topRight.y - bottomLeft.y;
+        originalTopRight = topRight = bottomLeft + Vector(windowWidth, windowHeight);
     }
 
     float left(){
@@ -582,25 +582,18 @@ public:
         return bottomLeft.y;
     }
 
-    void moveXTo(float movement)
-    {
-        bottomLeft.x = originalBottomLeft.x + movement;
-        topRight.x = originalTopRight.x + movement;
-    }
-
-    void moveYTo(float movement)
-    {
-        bottomLeft.y = originalBottomLeft.y + movement;
-        topRight.y = originalTopRight.y + movement;
+    void move(Vector change){
+        bottomLeft = originalBottomLeft + change;
+        topRight = originalTopRight + change;
     }
 
     Vector getWorldPos (int x, int y, int screenWidth, int screenHeight)
     {
         float x01 = (float) x / (float) screenWidth;
         float yInverse = screenHeight - y;
-        float y01 = (float) yInverse / (float) screenHeight;
-        float xResized = x01 * Camera::width();
-        float yResized = y01 * Camera::height();
+        float y01 = yInverse / (float) screenHeight;
+        float xResized = x01 * windowWidth;
+        float yResized = y01 * windowHeight;
         Vector resizedPos(xResized, yResized, 0);
         return resizedPos + bottomLeft;
     }
@@ -657,14 +650,10 @@ void moveControlPoints(float ts, long circulationStartTime){
     }
 }
 
-void moveCamera(Vector lookat) {
-
-}
-
 void SimulateWorld(float tstart, float tend)
 {
     float dt = 10.0f;
-    if (currentSate == CIRCULATE)
+    if (currentSate == CIRCULATE || currentSate == CAMERA_MOVING)
         for (float ts = tstart; ts < tend; ts += dt) {
             moveControlPoints(ts, circulationStartTime);
 
@@ -676,16 +665,7 @@ void SimulateWorld(float tstart, float tend)
         }
 
     if (currentSate == CAMERA_MOVING)
-        // TODO
-        for (float ts = tstart; ts < tend; ts += dt) {
-            moveCamera(currentControlPoints.getP(followedControlPoint));
-
-            if (currentControlPoints.getSize() >= 2) {
-                crSpline.computeCurve();
-                bezier.computeCurve();
-                convexHullFinder.findConvexHull(currentControlPoints);
-            }
-        }
+        camera.move(followedControlPoint -> p - followStartPoint);
 }
 
 
@@ -713,13 +693,13 @@ void onDisplay( )
 
         glColor3f(BLACK.r, BLACK.g, BLACK.b);
         for (unsigned i = 0; i < currentControlPoints.getSize(); i++)
-            DrawCircle(currentControlPoints.getP(i), 2.0f);
+            DrawCircle(currentControlPoints.getP(i), radius);
     }
 
     else {
         glColor3f(BLACK.r, BLACK.g, BLACK.b);
         for (unsigned i = 0; i < currentControlPoints.getSize(); i++)
-            DrawCircle(currentControlPoints.getP(i), 2.0f);
+            DrawCircle(currentControlPoints.getP(i), radius);
     }
 
     glutSwapBuffers();     				// Buffercsere: rajzolas vege
@@ -776,9 +756,14 @@ void onMouse(int button, int state, int x, int y)
     {
         // elindítja a kamerát,
         if (currentSate == CIRCULATE || currentSate == CAMERA_MOVING){
-            currentSate = CAMERA_MOVING;
-            // TODO kitalálni melyik kontrollpontra kattintott
-            // followedControlPoint =
+            Vector pos = camera.getWorldPos(x, y, screenWidth, screenHeight);
+            ControlPoint * clickedControlPoint = currentControlPoints.getControlPointAtPos(pos);
+            if (clickedControlPoint != NULL) {
+                followedControlPoint = clickedControlPoint;
+                followStartPoint = clickedControlPoint->p;
+                camera.move(followedControlPoint -> p - followStartPoint);
+                currentSate = CAMERA_MOVING;
+            }
         }
         glutPostRedisplay();
     }

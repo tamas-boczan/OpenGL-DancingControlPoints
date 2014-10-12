@@ -383,6 +383,14 @@ public:
     size_t getCurvePointSize(){
         return curvePointSize;
     }
+
+    void drawCurve(Color color) {
+        glColor3f(color.r, color.g, color.b);
+        glBegin(GL_LINE_STRIP);
+        for (unsigned i = 0; i < curvePointSize; i++)
+            glVertex2f(curvePoints[i].x, curvePoints[i].y);
+        glEnd();
+    }
 };
 
 class CRSpline: public Curve
@@ -526,7 +534,7 @@ public:
 
 class BezierCurve : public Curve
 {
-    // t = [0-1] tartom�ny k�z�tt, i=m=kpMax-1
+    // t = [0-1] tartomany kozott, i=m=kpMax-1
     Vector CountBezierPos(float t, int i, int m)
     {
         if (m == 0)
@@ -696,12 +704,23 @@ void SimulateWorld(float tstart, float tend)
     if (currentSate == CIRCULATE)
         for (float ts = tstart; ts < tend; ts += dt) {
             moveControlPoints(ts, circulationStartTime);
-            // calculate curves
+
+            if (currentControlPoints.getSize() >= 2) {
+                crSpline.computeCurve();
+                bezier.computeCurve();
+                findConvexHull(currentControlPoints);
+            }
         }
 
     if (currentSate == CAMERA_MOVING)
         for (float ts = tstart; ts < tend; ts += dt) {
             moveCamera(currentControlPoints.getP(followedControlPoint));
+
+            if (currentControlPoints.getSize() >= 2) {
+                crSpline.computeCurve();
+                bezier.computeCurve();
+                findConvexHull(currentControlPoints);
+            }
         }
 }
 
@@ -724,17 +743,8 @@ void onDisplay( )
             glVertex2f(convexHull.getP(i).x, convexHull.getP(i).y);
         glEnd();
 
-        glColor3f(RED.r, RED.g, RED.b);
-        glBegin(GL_LINE_STRIP);
-        for (unsigned i = 0; i < bezier.getCurvePointSize(); i++)
-            glVertex2f(bezier.getCurvePoint(i).x, bezier.getCurvePoint(i).y);
-        glEnd();
-
-        glColor3f(GREEN.r, GREEN.g, GREEN.b);
-        glBegin(GL_LINE_STRIP);
-        for (unsigned i = 0; i < crSpline.getCurvePointSize(); i++)
-            glVertex2f(crSpline.getCurvePoint(i).x, crSpline.getCurvePoint(i).y);
-        glEnd();
+        crSpline.drawCurve(GREEN);
+        bezier.drawCurve(RED);
 
         glColor3f(BLACK.r, BLACK.g, BLACK.b);
         for (unsigned i = 0; i < currentControlPoints.getSize(); i++)

@@ -151,6 +151,7 @@ enum possibleStates{ADDING_POINTS, CIRCULATE, CAMERA_MOVING} currentSate;
 
 struct ControlPoint
 {
+    Vector originalP;
     Vector p;
     float t;
 };
@@ -195,6 +196,16 @@ public:
         controlPoints[i] -> p = Position;
     }
 
+    Vector getOriginalP(unsigned i)
+    {
+        return controlPoints[i] -> originalP;
+    }
+
+    void setOriginalP(unsigned i, Vector Position)
+    {
+        controlPoints[i] -> originalP = Position;
+    }
+
     float getT(unsigned i)
     {
         return controlPoints[i] -> t;
@@ -236,7 +247,6 @@ public:
 };
 
 ControlPointList currentControlPoints;
-ControlPointList originalControlPoints;
 ControlPointList convexHull;
 
 class ConvexHullFinder {
@@ -269,59 +279,61 @@ class ConvexHullFinder {
         }
     }
 
-public:
-    // Returns a list of points on the convex hull in counter-clockwise order.
-    // Note: the last point in the returned list is the same as the first one.
-        ControlPointList findConvexHull (ControlPointList currentControlPoints){
-            ControlPointList orderedCp(currentControlPoints);
-            sortControlPointsByX(&orderedCp);
+    ControlPointList monotoneChain(ControlPointList currentControlPoints){
+        ControlPointList orderedCp(currentControlPoints);
+        sortControlPointsByX(&orderedCp);
 
-            ControlPointList lowerHull;
-            for (int i = 0; i < orderedCp.getSize(); i++){
-                size_t hullSize = lowerHull.getSize();
-                while (hullSize >= 2 && !isCounterClockWise(lowerHull.getP(hullSize - 2), lowerHull.getP(hullSize - 1), orderedCp.getP(i))) {
-                    lowerHull.removeLastReference();
-                    hullSize = lowerHull.getSize();
-                }
-                lowerHull.add(orderedCp.getControlPoint(i));
-            }
-
-            /*
-            for i = n, n-1, ..., 1:
-            while U contains at least two points and the sequence of last two points
-                    of U and the point P[i] does not make a counter-clockwise turn:
-                remove the last point from U
-            append P[i] to U
-             */
-            ControlPointList upperHull;
-            for (int i = orderedCp.getSize() - 1; i > 0; i--){
-                size_t hullSize = upperHull.getSize();
-                while (hullSize >= 2 && !isCounterClockWise(upperHull.getP(hullSize - 2), upperHull.getP(hullSize - 1), orderedCp.getP(i))) {
-                    upperHull.removeLastReference();
-                    hullSize = upperHull.getSize();
-                }
-                upperHull.add(orderedCp.getControlPoint(i));
-            }
-
-            /*
-            Remove the last point of each list (it's the same as the first point of the other list).
-            Concatenate L and U to obtain the convex hull of P.
-            Points in the result will be listed in counter-clockwise order.
-             */
-            if (lowerHull.getControlPoint(lowerHull.getSize() - 1) ==
-                    upperHull.getControlPoint(0))
+        ControlPointList lowerHull;
+        for (int i = 0; i < orderedCp.getSize(); i++){
+            size_t hullSize = lowerHull.getSize();
+            while (hullSize >= 2 && !isCounterClockWise(lowerHull.getP(hullSize - 2), lowerHull.getP(hullSize - 1), orderedCp.getP(i))) {
                 lowerHull.removeLastReference();
-
-            if (upperHull.getControlPoint(upperHull.getSize() - 1) ==
-                    lowerHull.getControlPoint(0))
-                upperHull.removeLastReference();
-
-            convexHull.clear();
-            for (int i = 0; i < lowerHull.getSize(); i++)
-                convexHull.add(lowerHull.getControlPoint(i));
-            for (int i = 0; i < upperHull.getSize(); i++)
-                convexHull.add(upperHull.getControlPoint(i));
+                hullSize = lowerHull.getSize();
+            }
+            lowerHull.add(orderedCp.getControlPoint(i));
         }
+
+        /*
+        for i = n, n-1, ..., 1:
+        while U contains at least two points and the sequence of last two points
+                of U and the point P[i] does not make a counter-clockwise turn:
+            remove the last point from U
+        append P[i] to U
+         */
+        ControlPointList upperHull;
+        for (int i = orderedCp.getSize() - 1; i > 0; i--){
+            size_t hullSize = upperHull.getSize();
+            while (hullSize >= 2 && !isCounterClockWise(upperHull.getP(hullSize - 2), upperHull.getP(hullSize - 1), orderedCp.getP(i))) {
+                upperHull.removeLastReference();
+                hullSize = upperHull.getSize();
+            }
+            upperHull.add(orderedCp.getControlPoint(i));
+        }
+
+        /*
+        Remove the last point of each list (it's the same as the first point of the other list).
+        Concatenate L and U to obtain the convex hull of P.
+        Points in the result will be listed in counter-clockwise order.
+         */
+        if (lowerHull.getControlPoint(lowerHull.getSize() - 1) ==
+                upperHull.getControlPoint(0))
+            lowerHull.removeLastReference();
+
+        if (upperHull.getControlPoint(upperHull.getSize() - 1) ==
+                lowerHull.getControlPoint(0))
+            upperHull.removeLastReference();
+
+        convexHull.clear();
+        for (int i = 0; i < lowerHull.getSize(); i++)
+            convexHull.add(lowerHull.getControlPoint(i));
+        for (int i = 0; i < upperHull.getSize(); i++)
+            convexHull.add(upperHull.getControlPoint(i));
+    }
+
+public:
+        ControlPointList findConvexHull (ControlPointList currentControlPoints) {
+        return monotoneChain(currentControlPoints);
+    }
 } convexHullFinder;
 
 
@@ -532,6 +544,8 @@ public:
 
 } bezier(&currentControlPoints);
 
+// TODO: catmull-clark
+
 class Camera
 {
     Vector bottomLeft, topRight;
@@ -618,6 +632,29 @@ void DrawCircle(Vector Center, float radius)
 }
 
 void moveControlPoints(float ts, long circulationStartTime){
+    double period = 5000.0;
+    double radius = 5;
+    double Pi = 3.14159;
+    if (ts < circulationStartTime)
+        ts = circulationStartTime;
+    // azért adjuk hozzá, hogy a kör tetejéről induljon a periódus, a periódus 1/4-edénél van a kör tetején.
+    ts += 0.25 * period;
+    double periodsDone = floor((ts - circulationStartTime)  / period);
+    double timePastInPeriod = ts - circulationStartTime - (periodsDone * period);
+    double periodPart = timePastInPeriod / period;
+    double angle = 2 * Pi * periodPart;
+
+    for (int i = 0; i < currentControlPoints.getSize(); i+=2) {
+        double newX = currentControlPoints.getOriginalP(i).x - radius * cos(angle);
+        double newY = currentControlPoints.getOriginalP(i).y + radius * sin(angle) - radius;
+        currentControlPoints.setP(i, Vector(newX, newY));
+    }
+
+    for (int i = 1; i < currentControlPoints.getSize(); i+=2) {
+        double newX = currentControlPoints.getOriginalP(i).x + radius * cos(angle);
+        double newY = currentControlPoints.getOriginalP(i).y + radius * sin(angle) - radius;
+        currentControlPoints.setP(i, Vector(newX, newY));
+    }
 }
 
 void moveCamera(Vector lookat) {
@@ -639,6 +676,7 @@ void SimulateWorld(float tstart, float tend)
         }
 
     if (currentSate == CAMERA_MOVING)
+        // TODO
         for (float ts = tstart; ts < tend; ts += dt) {
             moveCamera(currentControlPoints.getP(followedControlPoint));
 
@@ -697,6 +735,8 @@ void onKeyboard(unsigned char key, int x, int y)
     {
         if (currentSate == ADDING_POINTS) {
             circulationStartTime = glutGet(GLUT_ELAPSED_TIME);
+            for (int i = 0; i < currentControlPoints.getSize(); i++)
+                currentControlPoints.setOriginalP(i, currentControlPoints.getP(i));
             currentSate = CIRCULATE;
         }
     }

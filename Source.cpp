@@ -42,6 +42,7 @@
 //=============================================================================================
 
 #define _USE_MATH_DEFINES
+
 #include <math.h>
 #include <stdlib.h>
 
@@ -53,6 +54,7 @@
 #if defined(WIN32) || defined(_WIN32) || defined(__WIN32__)
 #include <windows.h>
 #endif
+
 #include <GL/gl.h>
 #include <GL/glu.h>
 #include <GL/glut.h>
@@ -69,36 +71,42 @@
 struct Vector {
     float x, y, z;
 
-    Vector( ) {
+    Vector() {
         x = y = z = 0;
     }
+
     Vector(float x0, float y0, float z0 = 0) {
-        x = x0; y = y0; z = z0;
+        x = x0;
+        y = y0;
+        z = z0;
     }
+
     Vector operator*(float a) {
         return Vector(x * a, y * a, z * a);
     }
+
     Vector operator/(float a) {
         return Vector(x / a, y / a, z / a);
     }
-    Vector operator+(const Vector& v) {
+
+    Vector operator+(const Vector &v) {
         return Vector(x + v.x, y + v.y, z + v.z);
     }
-    Vector operator-(const Vector& v) {
+
+    Vector operator-(const Vector &v) {
         return Vector(x - v.x, y - v.y, z - v.z);
     }
-    float operator*(const Vector& v) { 	// dot product
+
+    float operator*(const Vector &v) {    // dot product
         return (x * v.x + y * v.y + z * v.z);
     }
-    Vector operator%(const Vector& v) { 	// cross product
-        return Vector(y*v.z-z*v.y, z*v.x - x*v.z, x*v.y - y*v.x);
-    }
-    float Length() {
-        return sqrt(x * x + y * y + z * z);
+
+    Vector operator%(const Vector &v) {    // cross product
+        return Vector(y * v.z - z * v.y, z * v.x - x * v.z, x * v.y - y * v.x);
     }
 
-    Vector normalized() {
-        return Vector(x / Length(), y / Length(), z / Length());
+    float Length() {
+        return sqrt(x * x + y * y + z * z);
     }
 };
 
@@ -108,24 +116,30 @@ struct Vector {
 struct Color {
     float r, g, b;
 
-    Color( ) {
+    Color() {
         r = g = b = 0;
     }
+
     Color(float r0, float g0, float b0) {
-        r = r0; g = g0; b = b0;
+        r = r0;
+        g = g0;
+        b = b0;
     }
+
     Color operator*(float a) {
         return Color(r * a, g * a, b * a);
     }
-    Color operator*(const Color& c) {
+
+    Color operator*(const Color &c) {
         return Color(r * c.r, g * c.g, b * c.b);
     }
-    Color operator+(const Color& c) {
+
+    Color operator+(const Color &c) {
         return Color(r + c.r, g + c.g, b + c.b);
     }
 };
 
-const int screenWidth = 600;	// alkalmazás ablak felbontása
+const int screenWidth = 600;    // alkalmazás ablak felbontása
 const int screenHeight = 600;
 
 const size_t maxControlPoints = 10;
@@ -144,10 +158,11 @@ const Color BLUE = Color(0.0f, 0.0f, 1.0f);
 long currentTime;
 long circulationStartTime;
 
-enum possibleStates{ADDING_POINTS, CIRCULATE, CAMERA_MOVING} currentSate;
+enum possibleStates {
+    ADDING_POINTS, CIRCULATE, CAMERA_MOVING
+} currentSate;
 
-struct ControlPoint
-{
+struct ControlPoint {
     Vector originalP;
     Vector p;
     float t;
@@ -156,9 +171,8 @@ struct ControlPoint
 ControlPoint allControlPoints[maxControlPoints];
 int allControlPointNumber;
 
-class ControlPointList
-{
-    ControlPoint* controlPoints[maxControlPoints];
+class ControlPointList {
+    ControlPoint *controlPoints[maxControlPoints];
     size_t size;
 
 public:
@@ -166,20 +180,19 @@ public:
     ControlPointList(size_t size = 0) : size(size) {
     }
 
-    ControlPointList (const ControlPointList &c2)
-    {
+    ControlPointList(const ControlPointList &c2) {
         size = c2.size;
         for (int i = 0; i < size; i++) {
             controlPoints[i] = c2.controlPoints[i];
         }
     }
 
-    ControlPoint * getControlPoint(unsigned i) {
+    ControlPoint *getControlPoint(unsigned i) {
         return controlPoints[i];
     }
 
-    ControlPoint * getControlPointAtPos(Vector p) {
-        for (int i = 0; i < size; i++){
+    ControlPoint *getControlPointAtPos(Vector p) {
+        for (int i = 0; i < size; i++) {
             Vector distance = p - controlPoints[i]->p;
             if (distance.Length() < circleRadius)
                 return controlPoints[i];
@@ -187,45 +200,35 @@ public:
         return NULL;
     }
 
-    void setControlPoint(unsigned i, ControlPoint * cp){
+    void setControlPoint(unsigned i, ControlPoint *cp) {
         controlPoints[i] = cp;
     }
 
-    Vector getP(unsigned i)
-    {
-        return controlPoints[i]-> p;
+    Vector getP(unsigned i) {
+        return controlPoints[i]->p;
     }
 
-    void setP(unsigned i, Vector Position)
-    {
-        controlPoints[i] -> p = Position;
+    void setP(unsigned i, Vector Position) {
+        controlPoints[i]->p = Position;
     }
 
-    Vector getOriginalP(unsigned i)
-    {
-        return controlPoints[i] -> originalP;
+    Vector getOriginalP(unsigned i) {
+        return controlPoints[i]->originalP;
     }
 
-    void setOriginalP(unsigned i, Vector Position)
-    {
-        controlPoints[i] -> originalP = Position;
+    void setOriginalP(unsigned i, Vector Position) {
+        controlPoints[i]->originalP = Position;
     }
 
-    float getT(unsigned i)
-    {
-        return controlPoints[i] -> t;
-    }
-
-    void setT(unsigned i, float weight)
-    {
-        controlPoints[i] -> t = weight;
+    float getT(unsigned i) {
+        return controlPoints[i]->t;
     }
 
     size_t getSize() {
         return size;
     }
 
-    void add(ControlPoint * cp) {
+    void add(ControlPoint *cp) {
         if (size < maxControlPoints) {
             controlPoints[size] = cp;
             size++;
@@ -245,14 +248,9 @@ public:
     void removeLastReference() {
         size--;
     }
-
-    void clear() {
-        size = 0;
-    }
 };
 
-class Shape
-{
+class Shape {
 protected:
     static const size_t shapeResolution = 200;
     ControlPointList *cp;
@@ -260,12 +258,13 @@ protected:
     size_t shapePointSize;
 
 public:
-    Shape(ControlPointList * controlPoints){
+    Shape(ControlPointList *controlPoints) {
         cp = controlPoints;
         shapePointSize = 0;
     }
 
-    virtual void computeShape(){}
+    virtual void computeShape() {
+    }
 
     virtual void drawShape(Color color) {
         glColor3f(color.r, color.g, color.b);
@@ -276,9 +275,8 @@ public:
     }
 };
 
-class ConvexHull : public Shape
-{
-    bool isCounterClockWise (Vector p1, Vector p2, Vector p3) {
+class ConvexHull : public Shape {
+    bool isCounterClockWise(Vector p1, Vector p2, Vector p3) {
         Vector side1 = p2 - p1;
         Vector side2 = p3 - p1;
         Vector meroleges = side1 % side2;
@@ -286,7 +284,7 @@ class ConvexHull : public Shape
         return (direction <= 0.0);
     }
 
-    bool isLeftFrom (Vector v1, Vector v2){
+    bool isLeftFrom(Vector v1, Vector v2) {
         if (v1.x < v2.x)
             return true;
         if (v1.x > v2.x)
@@ -294,9 +292,9 @@ class ConvexHull : public Shape
         return (v1.y < v2.y);
     }
 
-    void sortControlPointsByX(ControlPointList * cpList){
+    void sortControlPointsByX(ControlPointList *cpList) {
         size_t n = cpList->getSize();
-        for (size_t c = 0 ; c < ( n - 1 ); c++) {
+        for (size_t c = 0; c < (n - 1); c++) {
             for (size_t d = 0; d < n - c - 1; d++) {
                 if (isLeftFrom(cpList->getP(d + 1), cpList->getP(d))) {
                     ControlPoint *temp = cpList->getControlPoint(d);
@@ -307,12 +305,12 @@ class ConvexHull : public Shape
         }
     }
 
-    ControlPointList monotoneChain(){
+    ControlPointList monotoneChain() {
         ControlPointList orderedCp(*cp);
         sortControlPointsByX(&orderedCp);
 
         ControlPointList lowerHull;
-        for (int i = 0; i < orderedCp.getSize(); i++){
+        for (int i = 0; i < orderedCp.getSize(); i++) {
             size_t hullSize = lowerHull.getSize();
             while (hullSize >= 2 && !isCounterClockWise(lowerHull.getP(hullSize - 2), lowerHull.getP(hullSize - 1), orderedCp.getP(i))) {
                 lowerHull.removeLastReference();
@@ -329,7 +327,7 @@ class ConvexHull : public Shape
         append P[i] to U
          */
         ControlPointList upperHull;
-        for (int i = orderedCp.getSize() - 1; i > 0; i--){
+        for (int i = orderedCp.getSize() - 1; i > 0; i--) {
             size_t hullSize = upperHull.getSize();
             while (hullSize >= 2 && !isCounterClockWise(upperHull.getP(hullSize - 2), upperHull.getP(hullSize - 1), orderedCp.getP(i))) {
                 upperHull.removeLastReference();
@@ -363,10 +361,11 @@ class ConvexHull : public Shape
     }
 
 public:
-    ConvexHull(ControlPointList * controlPointList)
-    : Shape(controlPointList){}
+    ConvexHull(ControlPointList *controlPointList)
+            : Shape(controlPointList) {
+    }
 
-    void computeShape () {
+    void computeShape() {
         monotoneChain();
     }
 
@@ -380,26 +379,24 @@ public:
 
 };
 
-class CatmullRomSpline: public Shape
-{
+class CatmullRomSpline : public Shape {
     unsigned pointsBetweenControlPoints;
     Vector v[maxControlPoints];
     Vector startV;
     Vector endV;
 
-    Vector getAi0(int prev){
+    Vector getAi0(int prev) {
         return cp->getP(prev);
     }
 
-    Vector getAi1(int prev){
+    Vector getAi1(int prev) {
         return v[prev];
     }
 
-    Vector getAi2(int prev)
-    {
+    Vector getAi2(int prev) {
         int i = prev;
         Vector p0 = cp->getP(i);
-        Vector p1 = cp->getP(i+1);
+        Vector p1 = cp->getP(i + 1);
         float t0 = cp->getT(i);
         float t1 = cp->getT(i + 1);
         Vector tag1 = (p1 - p0) * 3
@@ -410,11 +407,10 @@ class CatmullRomSpline: public Shape
         return tag1 - tag2;
     }
 
-    Vector getAi3(int prev)
-    {
+    Vector getAi3(int prev) {
         int i = prev;
         Vector p0 = cp->getP(i);
-        Vector p1 = cp->getP(i+1);
+        Vector p1 = cp->getP(i + 1);
         float t0 = cp->getT(i);
         float t1 = cp->getT(i + 1);
         Vector tag1 = (p0 - p1) * 2
@@ -426,7 +422,7 @@ class CatmullRomSpline: public Shape
     }
 
 public:
-    CatmullRomSpline(ControlPointList * controlPointList)
+    CatmullRomSpline(ControlPointList *controlPointList)
             : Shape(controlPointList)    // Call the superclass constructor in the subclass' initialization list.
     {
         startV = Vector(0.00001, 0.00001, 0.0);
@@ -434,12 +430,10 @@ public:
         pointsBetweenControlPoints = shapeResolution / maxControlPoints;
     }
 
-    void ComputeV()
-    {
+    void ComputeV() {
         v[0] = startV;
         v[cp->getSize() - 1] = endV;
-        for (int i = 1; i < cp->getSize() - 1; i++)
-        {
+        for (int i = 1; i < cp->getSize() - 1; i++) {
             Vector p0 = cp->getP(i);
             Vector pp1 = cp->getP(i + 1);
             Vector pm1 = cp->getP(i - 1);
@@ -453,8 +447,7 @@ public:
         }
     }
 
-    Vector GetPos(float t, int prevIndex)
-    {
+    Vector GetPos(float t, int prevIndex) {
         int i = prevIndex;
         Vector ai0 = getAi0(i);
         Vector ai1 = getAi1(i);
@@ -475,11 +468,10 @@ public:
         shapePointSize = 0;
 
         ComputeV();
-        for (unsigned i = 0; i < cpSize -1; i++)
-            for (unsigned j = i * points; j < (i+1) * points; j++)
-            {
+        for (unsigned i = 0; i < cpSize - 1; i++)
+            for (unsigned j = i * points; j < (i + 1) * points; j++) {
                 float t = cp->getT(i) + (
-                        ((cp->getT(i+1) - cp->getT(i)) / (float)points) * (j - (i * (float)points))
+                        ((cp->getT(i + 1) - cp->getT(i)) / (float) points) * (j - (i * (float) points))
                 );
                 shapePoints[j] = GetPos(t, i);
                 shapePointSize = j + 1;
@@ -487,11 +479,9 @@ public:
     }
 };
 
-class BezierCurve : public Shape
-{
+class BezierCurve : public Shape {
     // t = [0-1] tartomany kozott, i=m=kpMax-1
-    Vector getPos(float t, int i, int m)
-    {
+    Vector getPos(float t, int i, int m) {
         if (m == 0)
             return cp->getP(i);
 
@@ -500,11 +490,11 @@ class BezierCurve : public Shape
     }
 
 public:
-    BezierCurve (ControlPointList * controlPointList)
-            : Shape(controlPointList){};
+    BezierCurve(ControlPointList *controlPointList)
+            : Shape(controlPointList) {
+    };
 
-    Vector GetPos(float t)
-    {
+    Vector GetPos(float t) {
         return getPos(t, cp->getSize() - 1, cp->getSize() - 1);
     }
 
@@ -523,11 +513,10 @@ public:
 
 };
 
-class CatmullClarkCurve : public Shape
-{
+class CatmullClarkCurve : public Shape {
 public:
-    CatmullClarkCurve (ControlPointList * controlPointList)
-            : Shape(controlPointList){
+    CatmullClarkCurve(ControlPointList *controlPointList)
+            : Shape(controlPointList) {
         shapePointSize = 0;
     };
 
@@ -536,41 +525,38 @@ public:
     }
 };
 
-class Camera
-{
+class Camera {
     static const float windowWidth = 58;
     static const float windowHeight = 68;
     Vector bottomLeft, topRight, originalBottomLeft, originalTopRight;
 public:
-    Camera()
-    {
+    Camera() {
         originalBottomLeft = bottomLeft = Vector(21.0f, 16.0f);
         originalTopRight = topRight = bottomLeft + Vector(windowWidth, windowHeight);
     }
 
-    float left(){
+    float left() {
         return bottomLeft.x;
     }
 
-    float right(){
+    float right() {
         return topRight.x;
     }
 
-    float top(){
+    float top() {
         return topRight.y;
     }
 
-    float bottom(){
+    float bottom() {
         return bottomLeft.y;
     }
 
-    void move(Vector change){
+    void move(Vector change) {
         bottomLeft = originalBottomLeft + change;
         topRight = originalTopRight + change;
     }
 
-    Vector getWorldPos (int x, int y, int screenWidth, int screenHeight)
-    {
+    Vector getWorldPos(int x, int y, int screenWidth, int screenHeight) {
         float x01 = (float) x / (float) screenWidth;
         float yInverse = screenHeight - y;
         float y01 = yInverse / (float) screenHeight;
@@ -583,39 +569,37 @@ public:
 } camera;
 
 ControlPointList currentControlPoints;
-ControlPoint * followedControlPoint;
+ControlPoint *followedControlPoint;
 Vector followStartPoint;
 ConvexHull convexHull(&currentControlPoints);
 CatmullRomSpline crSpline(&currentControlPoints);
 BezierCurve bezier(&currentControlPoints);
 CatmullClarkCurve clark(&currentControlPoints);
-Shape * shapes[4] = {&convexHull, &crSpline, &bezier, &clark};
+Shape *shapes[4] = {&convexHull, &crSpline, &bezier, &clark};
 
 // Inicializacio, a program futasanak kezdeten, az OpenGL kontextus letrehozasa utan hivodik meg (ld. main() fv.)
-void onInitialization( )
-{
+void onInitialization() {
     glViewport(0, 0, screenWidth, screenHeight);
     currentSate = ADDING_POINTS;
     allControlPointNumber = 0;
 
 }
 
-void drawCircle(Vector Center, float radius)
-{
+void drawCircle(Vector Center, float radius) {
     int triangles = 30;
     float Pi = 3.14159;
     float delta = 2 * Pi / triangles;
     glBegin(GL_TRIANGLE_FAN);
     glVertex2f(Center.x, Center.y);
     for (int i = 0; i <= triangles; i++)
-        glVertex2f (
-                Center.x + (radius * cos(i *  delta)),
+        glVertex2f(
+                Center.x + (radius * cos(i * delta)),
                 Center.y + (radius * sin(i * delta))
         );
     glEnd();
 }
 
-void moveControlPoints(float ts, long circulationStartTime){
+void moveControlPoints(float ts, long circulationStartTime) {
     double period = 5000.0;
     double radius = 5;
     double Pi = 3.14159;
@@ -623,26 +607,25 @@ void moveControlPoints(float ts, long circulationStartTime){
         ts = circulationStartTime;
     // azért adjuk hozzá, hogy a kör tetejéről induljon a periódus, a periódus 1/4-edénél van a kör tetején.
     ts += 0.25 * period;
-    double periodsDone = floor((ts - circulationStartTime)  / period);
+    double periodsDone = floor((ts - circulationStartTime) / period);
     double timePastInPeriod = ts - circulationStartTime - (periodsDone * period);
     double periodPart = timePastInPeriod / period;
     double angle = 2 * Pi * periodPart;
 
-    for (int i = 0; i < currentControlPoints.getSize(); i+=2) {
+    for (int i = 0; i < currentControlPoints.getSize(); i += 2) {
         double newX = currentControlPoints.getOriginalP(i).x - radius * cos(angle);
         double newY = currentControlPoints.getOriginalP(i).y + radius * sin(angle) - radius;
         currentControlPoints.setP(i, Vector(newX, newY));
     }
 
-    for (int i = 1; i < currentControlPoints.getSize(); i+=2) {
+    for (int i = 1; i < currentControlPoints.getSize(); i += 2) {
         double newX = currentControlPoints.getOriginalP(i).x + radius * cos(angle);
         double newY = currentControlPoints.getOriginalP(i).y + radius * sin(angle) - radius;
         currentControlPoints.setP(i, Vector(newX, newY));
     }
 }
 
-void SimulateWorld(float tstart, float tend)
-{
+void SimulateWorld(float tstart, float tend) {
     float dt = 10.0f;
     if (currentSate == CIRCULATE || currentSate == CAMERA_MOVING)
         for (float ts = tstart; ts < tend; ts += dt) {
@@ -654,12 +637,11 @@ void SimulateWorld(float tstart, float tend)
         }
 
     if (currentSate == CAMERA_MOVING)
-        camera.move(followedControlPoint -> p - followStartPoint);
+        camera.move(followedControlPoint->p - followStartPoint);
 }
 
 // Rajzolas, ha az alkalmazas ablak ervenytelenne valik, akkor ez a fuggveny hivodik meg
-void onDisplay( )
-{
+void onDisplay() {
     glClearColor(GREY.r, GREY.g, GREY.b, 1.0f);     // torlesi szin beallitasa
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // kepernyo torles
 
@@ -685,17 +667,15 @@ void onDisplay( )
             drawCircle(currentControlPoints.getP(i), circleRadius);
     }
 
-    glutSwapBuffers();     				// Buffercsere: rajzolas vege
+    glutSwapBuffers();                    // Buffercsere: rajzolas vege
 
 }
 
 // Billentyuzet esemenyeket lekezelo fuggveny (lenyomas)
-void onKeyboard(unsigned char key, int x, int y)
-{
+void onKeyboard(unsigned char key, int x, int y) {
     // space-re elindítjuk a keringést, de csak ha még a keringés előtti állapotban vagyunk
     // amúgy nem törődünk a Space-el
-    if (key == ' ')
-    {
+    if (key == ' ') {
         if (currentSate == ADDING_POINTS) {
             circulationStartTime = glutGet(GLUT_ELAPSED_TIME);
             for (int i = 0; i < currentControlPoints.getSize(); i++)
@@ -706,24 +686,20 @@ void onKeyboard(unsigned char key, int x, int y)
 }
 
 // Billentyuzet esemenyeket lekezelo fuggveny (felengedes)
-void onKeyboardUp(unsigned char key, int x, int y)
-{
+void onKeyboardUp(unsigned char key, int x, int y) {
 
 }
 
 // Eger esemenyeket lekezelo fuggveny
-void onMouse(int button, int state, int x, int y)
-{
-    if (button == GLUT_LEFT_BUTTON && state == GLUT_UP)
-    {
-        long clickTime = glutGet( GLUT_ELAPSED_TIME );
+void onMouse(int button, int state, int x, int y) {
+    if (button == GLUT_LEFT_BUTTON && state == GLUT_UP) {
+        long clickTime = glutGet(GLUT_ELAPSED_TIME);
 
         // felvesz egy új kontrollpontot és újraszámolja a görbét, de csak a pontfelvétel állapotában, ha még nem értük el a maxot
-        if (currentSate == ADDING_POINTS){
+        if (currentSate == ADDING_POINTS) {
             Vector pos = camera.getWorldPos(x, y, screenWidth, screenHeight);
-            if (currentControlPoints.getSize() < maxControlPoints)
-            {
-                currentControlPoints.add(pos, clickTime/1000.0f);
+            if (currentControlPoints.getSize() < maxControlPoints) {
+                currentControlPoints.add(pos, clickTime / 1000.0f);
                 if (currentControlPoints.getSize() >= 2) {
                     for (int i = 0; i < 4; i++)
                         shapes[i]->computeShape();
@@ -734,16 +710,15 @@ void onMouse(int button, int state, int x, int y)
         }
     }
 
-    if (button == GLUT_RIGHT_BUTTON && state == GLUT_DOWN)
-    {
+    if (button == GLUT_RIGHT_BUTTON && state == GLUT_DOWN) {
         // elindítja a kamerát,
-        if (currentSate == CIRCULATE || currentSate == CAMERA_MOVING){
+        if (currentSate == CIRCULATE || currentSate == CAMERA_MOVING) {
             Vector pos = camera.getWorldPos(x, y, screenWidth, screenHeight);
-            ControlPoint * clickedControlPoint = currentControlPoints.getControlPointAtPos(pos);
+            ControlPoint *clickedControlPoint = currentControlPoints.getControlPointAtPos(pos);
             if (clickedControlPoint != NULL) {
                 followedControlPoint = clickedControlPoint;
                 followStartPoint = clickedControlPoint->p;
-                camera.move(followedControlPoint -> p - followStartPoint);
+                camera.move(followedControlPoint->p - followStartPoint);
                 currentSate = CAMERA_MOVING;
             }
         }
@@ -754,17 +729,15 @@ void onMouse(int button, int state, int x, int y)
 }
 
 // Eger mozgast lekezelo fuggveny
-void onMouseMotion(int x, int y)
-{
+void onMouseMotion(int x, int y) {
 
 }
 
 
 // `Idle' esemenykezelo, jelzi, hogy az ido telik, az Idle esemenyek frekvenciajara csak a 0 a garantalt minimalis ertek
-void onIdle( )
-{
-    float  old_time = currentTime;
-    currentTime = glutGet(GLUT_ELAPSED_TIME);		// program inditasa ota eltelt ido
+void onIdle() {
+    float old_time = currentTime;
+    currentTime = glutGet(GLUT_ELAPSED_TIME);        // program inditasa ota eltelt ido
 
     SimulateWorld(old_time, currentTime);
     glutPostRedisplay();
@@ -775,28 +748,28 @@ void onIdle( )
 
 // A C++ program belepesi pontja, a main fuggvenyt mar nem szabad bantani
 int main(int argc, char **argv) {
-    glutInit(&argc, argv); 				// GLUT inicializalasa
-    glutInitWindowSize(600, 600);			// Alkalmazas ablak kezdeti merete 600x600 pixel
-    glutInitWindowPosition(100, 100);			// Az elozo alkalmazas ablakhoz kepest hol tunik fel
-    glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE | GLUT_DEPTH);	// 8 bites R,G,B,A + dupla buffer + melyseg buffer
+    glutInit(&argc, argv);                // GLUT inicializalasa
+    glutInitWindowSize(600, 600);            // Alkalmazas ablak kezdeti merete 600x600 pixel
+    glutInitWindowPosition(100, 100);            // Az elozo alkalmazas ablakhoz kepest hol tunik fel
+    glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE | GLUT_DEPTH);    // 8 bites R,G,B,A + dupla buffer + melyseg buffer
 
-    glutCreateWindow("Grafika hazi feladat");		// Alkalmazas ablak megszuletik es megjelenik a kepernyon
+    glutCreateWindow("Grafika hazi feladat");        // Alkalmazas ablak megszuletik es megjelenik a kepernyon
 
-    glMatrixMode(GL_MODELVIEW);				// A MODELVIEW transzformaciot egysegmatrixra inicializaljuk
+    glMatrixMode(GL_MODELVIEW);                // A MODELVIEW transzformaciot egysegmatrixra inicializaljuk
     glLoadIdentity();
-    glMatrixMode(GL_PROJECTION);			// A PROJECTION transzformaciot egysegmatrixra inicializaljuk
+    glMatrixMode(GL_PROJECTION);            // A PROJECTION transzformaciot egysegmatrixra inicializaljuk
     glLoadIdentity();
 
-    onInitialization();					// Az altalad irt inicializalast lefuttatjuk
+    onInitialization();                    // Az altalad irt inicializalast lefuttatjuk
 
-    glutDisplayFunc(onDisplay);				// Esemenykezelok regisztralasa
+    glutDisplayFunc(onDisplay);                // Esemenykezelok regisztralasa
     glutMouseFunc(onMouse);
     glutIdleFunc(onIdle);
     glutKeyboardFunc(onKeyboard);
     glutKeyboardUpFunc(onKeyboardUp);
     glutMotionFunc(onMouseMotion);
 
-    glutMainLoop();					// Esemenykezelo hurok
+    glutMainLoop();                    // Esemenykezelo hurok
 
     return 0;
 }

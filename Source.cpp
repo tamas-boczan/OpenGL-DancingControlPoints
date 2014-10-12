@@ -574,35 +574,36 @@ class Camera
 {
     Vector bottomLeft, topRight;
     Vector originalBottomLeft, originalTopRight;
-    bool allowXMove, allowYMove;
 public:
-    ControlPoint camStart;
-
     Camera()
     {
-        allowXMove = false;
-        allowYMove = false;
-        originalBottomLeft = bottomLeft = Vector(100.0f, 300.0f);
-        originalTopRight = topRight = Vector(200.0f, 400.0f);
 
-        //originalBottomLeft = bottomLeft = Vector(50.0f, 50.0f);
-        //originalTopRight = topRight = Vector(108.0f, 118.0f);
+        originalBottomLeft = bottomLeft = Vector(21.0f, 16.0f);
+        originalTopRight = topRight = bottomLeft + Vector(58.0f, 68.0f);
     }
 
-    double left(){
-        return (double) bottomLeft.x;
+    float width() {
+        return topRight.x - bottomLeft.x;
     }
 
-    double right(){
-        return (double) topRight.x;
+    float height() {
+        return topRight.y - bottomLeft.y;
     }
 
-    double top(){
-        return (double) topRight.y;
+    float left(){
+        return bottomLeft.x;
     }
 
-    double bottom(){
-        return (double) bottomLeft.y;
+    float right(){
+        return topRight.x;
+    }
+
+    float top(){
+        return topRight.y;
+    }
+
+    float bottom(){
+        return bottomLeft.y;
     }
 
     void moveXTo(float movement)
@@ -617,54 +618,18 @@ public:
         topRight.y = originalTopRight.y + movement;
     }
 
-    void startMoving()
+    Vector getWorldPos (int x, int y, int screenWidth, int screenHeight)
     {
-        allowXMove = true;
-        allowYMove = true;
-    }
-
-    void stopXMoving()
-    {
-        allowXMove = false;
-        originalBottomLeft.x = bottomLeft.x;
-        originalTopRight.x = topRight.x;
-    }
-
-    void stopYMoving()
-    {
-        allowYMove = false;
-        originalBottomLeft.y = bottomLeft.y;
-        originalTopRight.y = topRight.y;
-    }
-
-    bool isMoving()
-    {
-        if (allowXMove == true || allowYMove == true)
-            return true;
-        else return false;
-    }
-
-    bool isXMoving()
-    {
-        return allowXMove;
-    }
-
-    bool isYMoving()
-    {
-        return allowYMove;
+        float x01 = (float) x / (float) screenWidth;
+        float yInverse = screenHeight - y;
+        float y01 = (float) yInverse / (float) screenHeight;
+        float xResized = x01 * Camera::width();
+        float yResized = y01 * Camera::height();
+        Vector resizedPos(xResized, yResized, 0);
+        return resizedPos + bottomLeft;
     }
 
 } camera;
-
-float ConvertX (int x)
-{
-    return (float) (camera.left() + ((float)x / screenWidth * 100.0f));
-}
-
-float ConvertY (int y)
-{
-    return (float) (camera.bottom() + (((float)y /screenHeight) * (-1) +1) * 100.0f);
-}
 
 // Inicializacio, a program futasanak kezdeten, az OpenGL kontextus letrehozasa utan hivodik meg (ld. main() fv.)
 void onInitialization( )
@@ -735,6 +700,7 @@ void onDisplay( )
     glLoadIdentity();
     gluOrtho2D(camera.left(), camera.right(), camera.bottom(), camera.top());
 
+
     if (currentControlPoints.getSize() >= 2)
     {
         glColor3f(TURQUOISE.r, TURQUOISE.g, TURQUOISE.b);
@@ -790,7 +756,7 @@ void onMouse(int button, int state, int x, int y)
 
         // felvesz egy új kontrollpontot és újraszámolja a görbét, de csak a pontfelvétel állapotában, ha még nem értük el a maxot
         if (currentSate == ADDING_POINTS){
-            Vector pos = Vector (ConvertX(x),  ConvertY(y));
+            Vector pos = camera.getWorldPos(x, y, screenWidth, screenHeight);
             if (currentControlPoints.getSize() < maxControlPoints)
             {
                 currentControlPoints.add(pos, clickTime/1000.0f);

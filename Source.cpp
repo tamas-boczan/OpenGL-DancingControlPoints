@@ -42,7 +42,6 @@
 //=============================================================================================
 
 #define _USE_MATH_DEFINES
-
 #include <math.h>
 #include <stdlib.h>
 
@@ -54,11 +53,9 @@
 #if defined(WIN32) || defined(_WIN32) || defined(__WIN32__)
 #include <windows.h>
 #endif
-
 #include <GL/gl.h>
 #include <GL/glu.h>
 #include <GL/glut.h>
-
 #endif
 
 
@@ -106,7 +103,7 @@ struct Vector {
     }
 
     float Length() {
-        return sqrt(x * x + y * y + z * z);
+        return (float) sqrt(x * x + y * y + z * z);
     }
 };
 
@@ -187,7 +184,7 @@ public:
         }
     }
 
-    ControlPoint *getControlPoint(unsigned i) {
+    ControlPoint *getControlPoint(size_t i) {
         return controlPoints[i];
     }
 
@@ -200,27 +197,27 @@ public:
         return NULL;
     }
 
-    void setControlPoint(unsigned i, ControlPoint *cp) {
+    void setControlPoint(size_t i, ControlPoint *cp) {
         controlPoints[i] = cp;
     }
 
-    Vector getP(unsigned i) {
+    Vector getP(size_t i) {
         return controlPoints[i]->p;
     }
 
-    void setP(unsigned i, Vector Position) {
+    void setP(size_t i, Vector Position) {
         controlPoints[i]->p = Position;
     }
 
-    Vector getOriginalP(unsigned i) {
+    Vector getOriginalP(size_t i) {
         return controlPoints[i]->originalP;
     }
 
-    void setOriginalP(unsigned i, Vector Position) {
+    void setOriginalP(size_t i, Vector Position) {
         controlPoints[i]->originalP = Position;
     }
 
-    float getT(unsigned i) {
+    float getT(size_t i) {
         return controlPoints[i]->t;
     }
 
@@ -269,7 +266,7 @@ public:
     virtual void drawShape(Color color) {
         glColor3f(color.r, color.g, color.b);
         glBegin(GL_LINE_STRIP);
-        for (unsigned i = 0; i < shapePointSize; i++)
+        for (size_t i = 0; i < shapePointSize; i++)
             glVertex2f(shapePoints[i].x, shapePoints[i].y);
         glEnd();
     }
@@ -305,12 +302,12 @@ class ConvexHull : public Shape {
         }
     }
 
-    ControlPointList monotoneChain() {
+    void monotoneChain() {
         ControlPointList orderedCp(*cp);
         sortControlPointsByX(&orderedCp);
 
         ControlPointList lowerHull;
-        for (int i = 0; i < orderedCp.getSize(); i++) {
+        for (size_t i = 0; i < orderedCp.getSize(); i++) {
             size_t hullSize = lowerHull.getSize();
             while (hullSize >= 2 && !isCounterClockWise(lowerHull.getP(hullSize - 2), lowerHull.getP(hullSize - 1), orderedCp.getP(i))) {
                 lowerHull.removeLastReference();
@@ -327,7 +324,7 @@ class ConvexHull : public Shape {
         append P[i] to U
          */
         ControlPointList upperHull;
-        for (int i = orderedCp.getSize() - 1; i > 0; i--) {
+        for (size_t i = orderedCp.getSize() - 1; i > 0; i--) {
             size_t hullSize = upperHull.getSize();
             while (hullSize >= 2 && !isCounterClockWise(upperHull.getP(hullSize - 2), upperHull.getP(hullSize - 1), orderedCp.getP(i))) {
                 upperHull.removeLastReference();
@@ -350,11 +347,11 @@ class ConvexHull : public Shape {
             upperHull.removeLastReference();
 
         shapePointSize = 0;
-        for (int i = 0; i < lowerHull.getSize(); i++) {
+        for (size_t i = 0; i < lowerHull.getSize(); i++) {
             shapePoints[shapePointSize] = lowerHull.getP(i);
             shapePointSize++;
         }
-        for (int i = 0; i < upperHull.getSize(); i++) {
+        for (size_t i = 0; i < upperHull.getSize(); i++) {
             shapePoints[shapePointSize] = upperHull.getP(i);
             shapePointSize++;
         }
@@ -372,7 +369,7 @@ public:
     void drawShape(Color color) {
         glColor3f(color.r, color.g, color.b);
         glBegin(GL_TRIANGLE_FAN);
-        for (unsigned i = 0; i < shapePointSize; i++)
+        for (size_t i = 0; i < shapePointSize; i++)
             glVertex2f(shapePoints[i].x, shapePoints[i].y);
         glEnd();
     }
@@ -385,16 +382,16 @@ class CatmullRomSpline : public Shape {
     Vector startV;
     Vector endV;
 
-    Vector getAi0(int prev) {
+    Vector getAi0(size_t prev) {
         return cp->getP(prev);
     }
 
-    Vector getAi1(int prev) {
+    Vector getAi1(size_t prev) {
         return v[prev];
     }
 
-    Vector getAi2(int prev) {
-        int i = prev;
+    Vector getAi2(size_t prev) {
+        size_t i = prev;
         Vector p0 = cp->getP(i);
         Vector p1 = cp->getP(i + 1);
         float t0 = cp->getT(i);
@@ -407,8 +404,8 @@ class CatmullRomSpline : public Shape {
         return tag1 - tag2;
     }
 
-    Vector getAi3(int prev) {
-        int i = prev;
+    Vector getAi3(size_t prev) {
+        size_t i = prev;
         Vector p0 = cp->getP(i);
         Vector p1 = cp->getP(i + 1);
         float t0 = cp->getT(i);
@@ -433,7 +430,7 @@ public:
     void ComputeV() {
         v[0] = startV;
         v[cp->getSize() - 1] = endV;
-        for (int i = 1; i < cp->getSize() - 1; i++) {
+        for (size_t i = 1; i < cp->getSize() - 1; i++) {
             Vector p0 = cp->getP(i);
             Vector pp1 = cp->getP(i + 1);
             Vector pm1 = cp->getP(i - 1);
@@ -447,8 +444,8 @@ public:
         }
     }
 
-    Vector GetPos(float t, int prevIndex) {
-        int i = prevIndex;
+    Vector GetPos(float t, size_t prevIndex) {
+        size_t i = prevIndex;
         Vector ai0 = getAi0(i);
         Vector ai1 = getAi1(i);
         Vector ai2 = getAi2(i);
@@ -468,8 +465,8 @@ public:
         shapePointSize = 0;
 
         ComputeV();
-        for (unsigned i = 0; i < cpSize - 1; i++)
-            for (unsigned j = i * points; j < (i + 1) * points; j++) {
+        for (size_t i = 0; i < cpSize - 1; i++)
+            for (size_t j = i * points; j < (i + 1) * points; j++) {
                 float t = cp->getT(i) + (
                         ((cp->getT(i + 1) - cp->getT(i)) / (float) points) * (j - (i * (float) points))
                 );
@@ -481,7 +478,7 @@ public:
 
 class BezierCurve : public Shape {
     // t = [0-1] tartomany kozott, i=m=kpMax-1
-    Vector getPos(float t, int i, int m) {
+    Vector getPos(float t, size_t i, size_t m) {
         if (m == 0)
             return cp->getP(i);
 
@@ -502,7 +499,7 @@ public:
         float firstT = cp->getT(0);
         float lastT = cp->getT(cp->getSize() - 1);
         float range = lastT - firstT;
-        int i = 0;
+        size_t i = 0;
         for (float t = firstT; t < lastT; t += range / (float) shapeResolution) {
             float t1 = (t - firstT) / range;
             shapePoints[i] = GetPos(t1);
@@ -593,8 +590,8 @@ void drawCircle(Vector Center, float radius) {
     glVertex2f(Center.x, Center.y);
     for (int i = 0; i <= triangles; i++)
         glVertex2f(
-                Center.x + (radius * cos(i * delta)),
-                Center.y + (radius * sin(i * delta))
+                Center.x + (radius * (float) cos(i * delta)),
+                Center.y + (radius * (float) sin(i * delta))
         );
     glEnd();
 }
@@ -612,15 +609,15 @@ void moveControlPoints(float ts, long circulationStartTime) {
     double periodPart = timePastInPeriod / period;
     double angle = 2 * Pi * periodPart;
 
-    for (int i = 0; i < currentControlPoints.getSize(); i += 2) {
-        double newX = currentControlPoints.getOriginalP(i).x - radius * cos(angle);
-        double newY = currentControlPoints.getOriginalP(i).y + radius * sin(angle) - radius;
+    for (size_t i = 0; i < currentControlPoints.getSize(); i += 2) {
+        float newX = (float) (currentControlPoints.getOriginalP(i).x - radius * cos(angle));
+        float newY = (float) (currentControlPoints.getOriginalP(i).y + radius * sin(angle) - radius);
         currentControlPoints.setP(i, Vector(newX, newY));
     }
 
-    for (int i = 1; i < currentControlPoints.getSize(); i += 2) {
-        double newX = currentControlPoints.getOriginalP(i).x + radius * cos(angle);
-        double newY = currentControlPoints.getOriginalP(i).y + radius * sin(angle) - radius;
+    for (size_t i = 1; i < currentControlPoints.getSize(); i += 2) {
+        float newX = (float) (currentControlPoints.getOriginalP(i).x + radius * cos(angle));
+        float newY = (float) (currentControlPoints.getOriginalP(i).y + radius * sin(angle) - radius);
         currentControlPoints.setP(i, Vector(newX, newY));
     }
 }
@@ -657,13 +654,13 @@ void onDisplay() {
         clark.drawShape(BLUE);
 
         glColor3f(BLACK.r, BLACK.g, BLACK.b);
-        for (unsigned i = 0; i < currentControlPoints.getSize(); i++)
+        for (size_t i = 0; i < currentControlPoints.getSize(); i++)
             drawCircle(currentControlPoints.getP(i), circleRadius);
     }
 
     else {
         glColor3f(BLACK.r, BLACK.g, BLACK.b);
-        for (unsigned i = 0; i < currentControlPoints.getSize(); i++)
+        for (size_t i = 0; i < currentControlPoints.getSize(); i++)
             drawCircle(currentControlPoints.getP(i), circleRadius);
     }
 
@@ -678,7 +675,7 @@ void onKeyboard(unsigned char key, int x, int y) {
     if (key == ' ') {
         if (currentSate == ADDING_POINTS) {
             circulationStartTime = glutGet(GLUT_ELAPSED_TIME);
-            for (int i = 0; i < currentControlPoints.getSize(); i++)
+            for (size_t i = 0; i < currentControlPoints.getSize(); i++)
                 currentControlPoints.setOriginalP(i, currentControlPoints.getP(i));
             currentSate = CIRCULATE;
         }
@@ -692,7 +689,7 @@ void onKeyboardUp(unsigned char key, int x, int y) {
 
 // Eger esemenyeket lekezelo fuggveny
 void onMouse(int button, int state, int x, int y) {
-    if (button == GLUT_LEFT_BUTTON && state == GLUT_UP) {
+    if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN) {
         long clickTime = glutGet(GLUT_ELAPSED_TIME);
 
         // felvesz egy új kontrollpontot és újraszámolja a görbét, de csak a pontfelvétel állapotában, ha még nem értük el a maxot
@@ -743,33 +740,34 @@ void onIdle() {
     glutPostRedisplay();
 }
 
+
 // ...Idaig modosithatod
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 // A C++ program belepesi pontja, a main fuggvenyt mar nem szabad bantani
 int main(int argc, char **argv) {
-    glutInit(&argc, argv);                // GLUT inicializalasa
-    glutInitWindowSize(600, 600);            // Alkalmazas ablak kezdeti merete 600x600 pixel
-    glutInitWindowPosition(100, 100);            // Az elozo alkalmazas ablakhoz kepest hol tunik fel
-    glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE | GLUT_DEPTH);    // 8 bites R,G,B,A + dupla buffer + melyseg buffer
+    glutInit(&argc, argv); 				// GLUT inicializalasa
+    glutInitWindowSize(600, 600);			// Alkalmazas ablak kezdeti merete 600x600 pixel
+    glutInitWindowPosition(100, 100);			// Az elozo alkalmazas ablakhoz kepest hol tunik fel
+    glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE | GLUT_DEPTH);	// 8 bites R,G,B,A + dupla buffer + melyseg buffer
 
-    glutCreateWindow("Grafika hazi feladat");        // Alkalmazas ablak megszuletik es megjelenik a kepernyon
+    glutCreateWindow("Grafika hazi feladat");		// Alkalmazas ablak megszuletik es megjelenik a kepernyon
 
-    glMatrixMode(GL_MODELVIEW);                // A MODELVIEW transzformaciot egysegmatrixra inicializaljuk
+    glMatrixMode(GL_MODELVIEW);				// A MODELVIEW transzformaciot egysegmatrixra inicializaljuk
     glLoadIdentity();
-    glMatrixMode(GL_PROJECTION);            // A PROJECTION transzformaciot egysegmatrixra inicializaljuk
+    glMatrixMode(GL_PROJECTION);			// A PROJECTION transzformaciot egysegmatrixra inicializaljuk
     glLoadIdentity();
 
-    onInitialization();                    // Az altalad irt inicializalast lefuttatjuk
+    onInitialization();					// Az altalad irt inicializalast lefuttatjuk
 
-    glutDisplayFunc(onDisplay);                // Esemenykezelok regisztralasa
+    glutDisplayFunc(onDisplay);				// Esemenykezelok regisztralasa
     glutMouseFunc(onMouse);
     glutIdleFunc(onIdle);
     glutKeyboardFunc(onKeyboard);
     glutKeyboardUpFunc(onKeyboardUp);
     glutMotionFunc(onMouseMotion);
 
-    glutMainLoop();                    // Esemenykezelo hurok
+    glutMainLoop();					// Esemenykezelo hurok
 
     return 0;
 }

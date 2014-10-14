@@ -519,6 +519,40 @@ class CatmullClarkCurve : public Shape {
         return p1 * weightP1 + p2 * weightP2 + p3 * weightP3;
     }
 
+    void copyArray(Vector from[], size_t fromSize, Vector to[], size_t * toSize){
+        for (size_t i = 0; i < fromSize; i++)
+            to[i] = from[i];
+        *toSize = fromSize;
+    }
+
+    void computeSegmentHalves(Vector *oldCurve, size_t oldCurveSize, Vector *halves){
+        for (size_t i = 1; i < oldCurveSize; i++)
+            halves[i - 1] = halfSegment(oldCurve[i - 1], oldCurve[i]);
+    }
+
+    void computeCentroids(Vector oldCurve[], size_t oldCurveSize, Vector halves[], Vector centroids[]){
+        size_t halvesSize = oldCurveSize - 1;
+        // az 1. és utolsó pont nem változik
+        centroids[0] = oldCurve[0];
+        centroids[oldCurveSize - 1] = oldCurve[oldCurveSize - 1];
+        //  az 1. háromszög: halves[0], oldCurve[1], halves[1]
+        // utolsó háromszög: halves[oldCurveSize - 3], oldCurve[oldCurveSize - 2], halves[oldCurveSize - 2]
+        for (size_t i = 1; i < halvesSize; i++)
+            centroids[i] = centroidOfTriangle(halves[i - 1], oldCurve[i], halves[i], 0.25, 0.5, 0.25);
+    }
+
+    // két tömböt össze-merge-el, egyszer az elsőből vesz elemet, aztán a másikból
+    void mergeAlternating(Vector arr1[], size_t arr1Size, Vector arr2[], size_t arr2Size, Vector newArr[]){
+        // arr1: centroids, oldCurveSize
+        // arr2: halves, halvesSize
+        // 0 -> newCurveSize - 1 = oldCurveSize  * 2 - 2
+        for (size_t i = 0; i < arr1Size; i++)
+            newArr[2 * i] = arr1[i];
+        // 1 -> newCurveSize - 2 = oldCurveSize * 2 - 3
+        for (size_t i = 0; i < arr2Size; i++)
+            newArr[2 * i + 1] = arr2[i];
+    }
+
 public:
     CatmullClarkCurve(ControlPointList *controlPointList)
             : Shape(controlPointList) {
@@ -538,42 +572,24 @@ public:
 
         while (newCurveSize < shapeResolution / 2) {
             // átmásolja newCurve-öt oldCurve-be
-            for (size_t i = 0; i < newCurveSize; i++)
-                oldCurve[i] = newCurve[i];
-            oldCurveSize = newCurveSize;
+            copyArray(newCurve, newCurveSize, oldCurve, &oldCurveSize);
 
             // kiszámítja az old Curve szakaszainak felezőpontjait, 1-el kevesebb felezőpont van, mint pont.
             size_t halvesSize = oldCurveSize - 1;
             Vector halves[halvesSize];
-            for (size_t i = 1; i < oldCurveSize; i++)
-                halves[i - 1] = halfSegment(oldCurve[i - 1], oldCurve[i]);
+            computeSegmentHalves(oldCurve, oldCurveSize, halves);
 
             // kiszámítja, hová kell eltolni az old Curve pontjait, hogy a háromszög súlypontjába kerüljenek
-            // az 1. és utolsó pont nem változik
             Vector centroids[oldCurveSize];
-            centroids[0] = oldCurve[0];
-            centroids[oldCurveSize - 1] = oldCurve[oldCurveSize - 1];
-            //  az 1. háromszög: halves[0], oldCurve[1], halves[1]
-            // utolsó háromszög: halves[oldCurveSize - 3], oldCurve[oldCurveSize - 2], halves[oldCurveSize - 2]
-            for (size_t i = 1; i < halvesSize; i++)
-                centroids[i] = centroidOfTriangle(halves[i - 1], oldCurve[i], halves[i], 0.25, 0.5, 0.25);
+            computeCentroids(oldCurve, oldCurveSize, halves, centroids);
 
             // merge: centroids + halves
-            newCurveSize = oldCurveSize * 2 - 1;
-            // 0 -> newCurveSize - 1 = oldCurveSize  * 2 - 2
-            for (size_t i = 0; i < oldCurveSize; i++)
-                newCurve[2 * i] = centroids[i];
-            // 1 -> newCurveSize - 2 = oldCurveSize * 2 - 3
-            for (size_t i = 0; i < halvesSize; i++)
-                newCurve[2 * i + 1] = halves[i];
+            mergeAlternating(centroids, oldCurveSize, halves, halvesSize, newCurve);
+            newCurveSize = oldCurveSize + halvesSize;
         }
 
         // lecseréli shapePoints-ot newCurve-re
-        shapePointSize = 0;
-        for (int i = 0; i < newCurveSize; i++) {
-            shapePoints[i] = newCurve[i];
-            shapePointSize++;
-        }
+        copyArray(newCurve, newCurveSize, shapePoints, &shapePointSize);
     }
 
 };

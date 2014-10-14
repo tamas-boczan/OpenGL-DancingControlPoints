@@ -142,7 +142,6 @@ const int screenHeight = 600;
 const size_t maxControlPoints = 10;
 const float circleRadius = 2.0;
 
-// színek
 const Color BLACK = Color(0.0f, 0.0f, 0.0f);
 const Color GREY = Color(0.85f, 0.85f, 0.85f);
 // Türkíz szín forrása: www.opengl.org/discussion_boards/showthread.php/132502-Color-tables
@@ -316,13 +315,6 @@ class ConvexHull : public Shape {
             lowerHull.add(orderedCp.getControlPoint(i));
         }
 
-        /*
-        for i = n, n-1, ..., 1:
-        while U contains at least two points and the sequence of last two points
-                of U and the point P[i] does not make a counter-clockwise turn:
-            remove the last point from U
-        append P[i] to U
-         */
         ControlPointList upperHull;
         for (size_t i = orderedCp.getSize() - 1; i > 0; i--) {
             size_t hullSize = upperHull.getSize();
@@ -333,11 +325,6 @@ class ConvexHull : public Shape {
             upperHull.add(orderedCp.getControlPoint(i));
         }
 
-        /*
-        Remove the last point of each list (it's the same as the first point of the other list).
-        Concatenate L and U to obtain the convex hull of P.
-        Points in the result will be listed in counter-clockwise order.
-         */
         if (lowerHull.getControlPoint(lowerHull.getSize() - 1) ==
                 upperHull.getControlPoint(0))
             lowerHull.removeLastReference();
@@ -420,7 +407,7 @@ class CatmullRomSpline : public Shape {
 
 public:
     CatmullRomSpline(ControlPointList *controlPointList)
-            : Shape(controlPointList)    // Call the superclass constructor in the subclass' initialization list.
+            : Shape(controlPointList)
     {
         startV = Vector(0.00001, 0.00001, 0.0);
         endV = Vector(0.00001, 0.00001, 0.0);
@@ -477,7 +464,6 @@ public:
 };
 
 class BezierCurve : public Shape {
-    // t = [0-1] tartomany kozott, i=m=kpMax-1
     Vector getPos(float t, size_t i, size_t m) {
         if (m == 0)
             return cp->getP(i);
@@ -532,23 +518,15 @@ class CatmullClarkCurve : public Shape {
 
     void computeCentroids(Vector oldCurve[], size_t oldCurveSize, Vector halves[], Vector centroids[]){
         size_t halvesSize = oldCurveSize - 1;
-        // az 1. és utolsó pont nem változik
         centroids[0] = oldCurve[0];
         centroids[oldCurveSize - 1] = oldCurve[oldCurveSize - 1];
-        //  az 1. háromszög: halves[0], oldCurve[1], halves[1]
-        // utolsó háromszög: halves[oldCurveSize - 3], oldCurve[oldCurveSize - 2], halves[oldCurveSize - 2]
         for (size_t i = 1; i < halvesSize; i++)
             centroids[i] = centroidOfTriangle(halves[i - 1], oldCurve[i], halves[i], 0.25, 0.5, 0.25);
     }
 
-    // két tömböt össze-merge-el, egyszer az elsőből vesz elemet, aztán a másikból
     void mergeAlternating(Vector arr1[], size_t arr1Size, Vector arr2[], size_t arr2Size, Vector newArr[]){
-        // arr1: centroids, oldCurveSize
-        // arr2: halves, halvesSize
-        // 0 -> newCurveSize - 1 = oldCurveSize  * 2 - 2
         for (size_t i = 0; i < arr1Size; i++)
             newArr[2 * i] = arr1[i];
-        // 1 -> newCurveSize - 2 = oldCurveSize * 2 - 3
         for (size_t i = 0; i < arr2Size; i++)
             newArr[2 * i + 1] = arr2[i];
     }
@@ -565,30 +543,23 @@ public:
         size_t newCurveSize;
         size_t oldCurveSize;
 
-        // a new curve-öt a kontrollpontokra inicializálja
         newCurveSize = cp->getSize();
         for (size_t i = 0; i < cp->getSize(); i++)
             newCurve[i] = cp->getP(i);
 
         while (newCurveSize < shapeResolution / 2) {
-            // átmásolja newCurve-öt oldCurve-be
             copyArray(newCurve, newCurveSize, oldCurve, &oldCurveSize);
 
-            // kiszámítja az old Curve szakaszainak felezőpontjait, 1-el kevesebb felezőpont van, mint pont.
             size_t halvesSize = oldCurveSize - 1;
             Vector halves[halvesSize];
             computeSegmentHalves(oldCurve, oldCurveSize, halves);
 
-            // kiszámítja, hová kell eltolni az old Curve pontjait, hogy a háromszög súlypontjába kerüljenek
             Vector centroids[oldCurveSize];
             computeCentroids(oldCurve, oldCurveSize, halves, centroids);
 
-            // merge: centroids + halves
             mergeAlternating(centroids, oldCurveSize, halves, halvesSize, newCurve);
             newCurveSize = oldCurveSize + halvesSize;
         }
-
-        // lecseréli shapePoints-ot newCurve-re
         copyArray(newCurve, newCurveSize, shapePoints, &shapePointSize);
     }
 
@@ -674,7 +645,6 @@ void moveControlPoints(float ts, long circulationStartTime) {
     double Pi = 3.14159;
     if (ts < circulationStartTime)
         ts = circulationStartTime;
-    // azért adjuk hozzá, hogy a kör tetejéről induljon a periódus, a periódus 1/4-edénél van a kör tetején.
     ts += 0.25 * period;
     double periodsDone = floor((ts - circulationStartTime) / period);
     double timePastInPeriod = ts - circulationStartTime - (periodsDone * period);
@@ -742,8 +712,6 @@ void onDisplay() {
 
 // Billentyuzet esemenyeket lekezelo fuggveny (lenyomas)
 void onKeyboard(unsigned char key, int x, int y) {
-    // space-re elindítjuk a keringést, de csak ha még a keringés előtti állapotban vagyunk
-    // amúgy nem törődünk a Space-el
     if (key == ' ') {
         if (currentSate == ADDING_POINTS) {
             circulationStartTime = glutGet(GLUT_ELAPSED_TIME);
@@ -764,7 +732,6 @@ void onMouse(int button, int state, int x, int y) {
     if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN) {
         long clickTime = glutGet(GLUT_ELAPSED_TIME);
 
-        // felvesz egy új kontrollpontot és újraszámolja a görbét, de csak a pontfelvétel állapotában, ha még nem értük el a maxot
         if (currentSate == ADDING_POINTS) {
             Vector pos = camera.getWorldPos(x, y, screenWidth, screenHeight);
             if (currentControlPoints.getSize() < maxControlPoints) {
@@ -780,7 +747,6 @@ void onMouse(int button, int state, int x, int y) {
     }
 
     if (button == GLUT_RIGHT_BUTTON && state == GLUT_DOWN) {
-        // elindítja a kamerát,
         if (currentSate == CIRCULATE || currentSate == CAMERA_MOVING) {
             Vector pos = camera.getWorldPos(x, y, screenWidth, screenHeight);
             ControlPoint *clickedControlPoint = currentControlPoints.getControlPointAtPos(pos);

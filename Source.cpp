@@ -511,6 +511,14 @@ public:
 };
 
 class CatmullClarkCurve : public Shape {
+    Vector halfSegment(Vector p1, Vector p2){
+        return (p1 + p2) / 2.0;
+    }
+
+    Vector centroidOfTriangle (Vector p1, Vector p2, Vector p3, float weightP1 = 0.3333, float weightP2 = 0.3333, float weightP3 = 0.3333){
+        return p1 * weightP1 + p2 * weightP2 + p3 * weightP3;
+    }
+
 public:
     CatmullClarkCurve(ControlPointList *controlPointList)
             : Shape(controlPointList) {
@@ -518,8 +526,56 @@ public:
     };
 
     void computeShape() {
-        // TODO
+        Vector oldCurve[shapeResolution + 1];
+        Vector newCurve[shapeResolution + 1];
+        size_t newCurveSize;
+        size_t oldCurveSize;
+
+        // a new curve-öt a kontrollpontokra inicializálja
+        newCurveSize = cp->getSize();
+        for (size_t i = 0; i < cp->getSize(); i++)
+            newCurve[i] = cp->getP(i);
+
+        while (newCurveSize < shapeResolution / 2) {
+            // átmásolja newCurve-öt oldCurve-be
+            for (size_t i = 0; i < newCurveSize; i++)
+                oldCurve[i] = newCurve[i];
+            oldCurveSize = newCurveSize;
+
+            // kiszámítja az old Curve szakaszainak felezőpontjait, 1-el kevesebb felezőpont van, mint pont.
+            size_t halvesSize = oldCurveSize - 1;
+            Vector halves[halvesSize];
+            for (size_t i = 1; i < oldCurveSize; i++)
+                halves[i - 1] = halfSegment(oldCurve[i - 1], oldCurve[i]);
+
+            // kiszámítja, hová kell eltolni az old Curve pontjait, hogy a háromszög súlypontjába kerüljenek
+            // az 1. és utolsó pont nem változik
+            Vector centroids[oldCurveSize];
+            centroids[0] = oldCurve[0];
+            centroids[oldCurveSize - 1] = oldCurve[oldCurveSize - 1];
+            //  az 1. háromszög: halves[0], oldCurve[1], halves[1]
+            // utolsó háromszög: halves[oldCurveSize - 3], oldCurve[oldCurveSize - 2], halves[oldCurveSize - 2]
+            for (size_t i = 1; i < halvesSize; i++)
+                centroids[i] = centroidOfTriangle(halves[i - 1], oldCurve[i], halves[i], 0.25, 0.5, 0.25);
+
+            // merge: centroids + halves
+            newCurveSize = oldCurveSize * 2 - 1;
+            // 0 -> newCurveSize - 1 = oldCurveSize  * 2 - 2
+            for (size_t i = 0; i < oldCurveSize; i++)
+                newCurve[2 * i] = centroids[i];
+            // 1 -> newCurveSize - 2 = oldCurveSize * 2 - 3
+            for (size_t i = 0; i < halvesSize; i++)
+                newCurve[2 * i + 1] = halves[i];
+        }
+
+        // lecseréli shapePoints-ot newCurve-re
+        shapePointSize = 0;
+        for (int i = 0; i < newCurveSize; i++) {
+            shapePoints[i] = newCurve[i];
+            shapePointSize++;
+        }
     }
+
 };
 
 class Camera {

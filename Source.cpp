@@ -206,43 +206,40 @@ class ConvexHull : public Shape {
         return 0;
     }
 
-    // Az algoritmust A. M. Andrew-tól publikálta 1979-ben. Az implementációt én csináltam.
+    // Az algoritmust A. M. Andrew publikálta 1979-ben. Az implementációt én csináltam.
     void monotoneChain() {
-        Vector controlPoints[cpSize];
+        Vector sortedCp[cpSize];
         for (size_t i = 0; i < cpSize; i++)
-            controlPoints[i] = cp[i].p;
-        qsort(controlPoints, cpSize, sizeof(Vector), compareVectorsByX);
+            sortedCp[i] = cp[i].p;
+        qsort(sortedCp, cpSize, sizeof(Vector), compareVectorsByX);
 
         Vector lowerHull[cpSize];
         size_t lowerHullSize = 0;
         for (size_t i = 0; i < cpSize; i++) {
             while (lowerHullSize >= 2
-                    && isClockWise(lowerHull[lowerHullSize - 2], lowerHull[lowerHullSize - 1], controlPoints[i]))
+                    && isClockWise(lowerHull[lowerHullSize - 2], lowerHull[lowerHullSize - 1], sortedCp[i]))
                 lowerHullSize--;
-            lowerHull[lowerHullSize++] = controlPoints[i];
+            lowerHull[lowerHullSize++] = sortedCp[i];
         }
 
         Vector upperHull[cpSize];
         size_t upperHullSize = 0;
         for (int i = (int) (cpSize - 1); i >= 0; i--) {
             while (upperHullSize >= 2
-                    && isClockWise(upperHull[upperHullSize - 2], upperHull[upperHullSize - 1], controlPoints[i]))
+                    && isClockWise(upperHull[upperHullSize - 2], upperHull[upperHullSize - 1], sortedCp[i]))
                 upperHullSize--;
-            upperHull[upperHullSize++] = controlPoints[i];
+            upperHull[upperHullSize++] = sortedCp[i];
         }
 
         lowerHullSize --;
         upperHullSize --;
 
         shapePointSize = 0;
-        for (size_t i = 0; i < lowerHullSize; i++) {
-            shapePoints[shapePointSize] = lowerHull[i];
-            shapePointSize++;
-        }
-        for (size_t i = 0; i < upperHullSize; i++) {
-            shapePoints[shapePointSize] = upperHull[i];
-            shapePointSize++;
-        }
+        for (size_t i = 0; i < lowerHullSize; i++)
+            shapePoints[shapePointSize++] = lowerHull[i];
+
+        for (size_t i = 0; i < upperHullSize; i++)
+            shapePoints[shapePointSize++] = upperHull[i];
     }
 
 public:
@@ -505,13 +502,14 @@ public:
 void addControlPoint(Vector p, float t) {
     if (cpSize < maxControlPoints) {
         cp[cpSize].p = p;
+        cp[cpSize].originalP = p;
         cp[cpSize].t = t;
         cpSize++;
     }
 }
 
 ControlPoint * getControlPointAtPos(Vector p) {
-    for (int i = 0; i < cpSize; i++) {
+    for (size_t i = 0; i < cpSize; i++) {
         Vector distance = p - cp[i].p;
         if (distance.Length() < circleRadius)
             return &cp[i];
@@ -532,22 +530,6 @@ void onInitialization() {
     glViewport(0, 0, screenWidth, screenHeight);
     currentSate = ADDING_POINTS;
     cpSize = 0;
-
-    //TEST
-    const Vector q0(30.0, 41.0);
-    const Vector q1(41.0, 67.0);
-    const Vector q2(62.0, 65.0);
-    const Vector q3(73.0, 40.0);
-    const Vector q4(24.0, 50.0);
-
-    addControlPoint(q2, 0.8);
-    addControlPoint(q0, 1.2);
-    addControlPoint(q3, 1.5);
-    addControlPoint(q1, 2.1);
-    addControlPoint(q4, 3.1);
-    for (size_t i = 0; i < 4; i++)
-        shapes[i]->computeShape();
-
 }
 
 void drawCircle(Vector Center, float radius) {
@@ -594,9 +576,8 @@ void SimulateWorld(float tstart, float tend) {
     if (currentSate == CIRCULATE || currentSate == CAMERA_MOVING)
         for (float ts = tstart; ts < tend; ts += dt) {
             moveControlPoints(ts, circulationStartTime);
-
             if (cpSize >= 2)
-                for (int i = 0; i < 4; i++)
+                for (size_t i = 0; i < 4; i++)
                     shapes[i]->computeShape();
         }
 
@@ -635,14 +616,10 @@ void onDisplay() {
 
 // Billentyuzet esemenyeket lekezelo fuggveny (lenyomas)
 void onKeyboard(unsigned char key, int x, int y) {
-    if (key == ' ') {
-        if (currentSate == ADDING_POINTS) {
-            circulationStartTime = glutGet(GLUT_ELAPSED_TIME);
-            for (size_t i = 0; i < cpSize; i++)
-                cp[i].originalP = cp[i].p;
-            currentSate = CIRCULATE;
+    if (key == ' ' && currentSate == ADDING_POINTS) {
+        circulationStartTime = glutGet(GLUT_ELAPSED_TIME);
+        currentSate = CIRCULATE;
         }
-    }
 }
 
 // Billentyuzet esemenyeket lekezelo fuggveny (felengedes)
@@ -652,19 +629,15 @@ void onKeyboardUp(unsigned char key, int x, int y) {
 
 // Eger esemenyeket lekezelo fuggveny
 void onMouse(int button, int state, int x, int y) {
-    if (button == GLUT_LEFT_BUTTON && state == GLUT_UP) {
+    if (button == GLUT_LEFT_BUTTON && state == GLUT_UP && currentSate == ADDING_POINTS) {
         long clickTime = glutGet(GLUT_ELAPSED_TIME);
-
-        if (currentSate == ADDING_POINTS) {
-            Vector pos = camera.getWorldPos(x, y, screenWidth, screenHeight);
-            if (cpSize < maxControlPoints) {
-                addControlPoint(pos, clickTime / 1000.0f);
-                if (cpSize >= 2) {
-                    for (int i = 0; i < 4; i++)
-                        shapes[i]->computeShape();
-                }
-                glutPostRedisplay();
-            }
+        Vector pos = camera.getWorldPos(x, y, screenWidth, screenHeight);
+        if (cpSize < maxControlPoints) {
+            addControlPoint(pos, clickTime / 1000.0f);
+            if (cpSize >= 2)
+                for (size_t i = 0; i < 4; i++)
+                    shapes[i] -> computeShape();
+            glutPostRedisplay();
         }
     }
 

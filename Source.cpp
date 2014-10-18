@@ -162,87 +162,18 @@ struct ControlPoint {
     float t;
 };
 
-ControlPoint allControlPoints[maxControlPoints];
-int allControlPointNumber;
-
-class ControlPointList {
-    ControlPoint *controlPoints[maxControlPoints];
-    size_t size;
-
-public:
-
-    ControlPointList(size_t size = 0) : size(size) {
-    }
-
-    ControlPointList(const ControlPointList &c2) {
-        size = c2.size;
-        for (int i = 0; i < size; i++) {
-            controlPoints[i] = c2.controlPoints[i];
-        }
-    }
-
-    ControlPoint *getControlPointAtPos(Vector p) {
-        for (int i = 0; i < size; i++) {
-            Vector distance = p - controlPoints[i]->p;
-            if (distance.Length() < circleRadius)
-                return controlPoints[i];
-        }
-        return NULL;
-    }
-
-    Vector getP(size_t i) {
-        return controlPoints[i]->p;
-    }
-
-    void setP(size_t i, Vector Position) {
-        controlPoints[i]->p = Position;
-    }
-
-    Vector getOriginalP(size_t i) {
-        return controlPoints[i]->originalP;
-    }
-
-    void setOriginalP(size_t i, Vector Position) {
-        controlPoints[i]->originalP = Position;
-    }
-
-    float getT(size_t i) {
-        return controlPoints[i]->t;
-    }
-
-    size_t getSize() {
-        return size;
-    }
-
-    void add(ControlPoint *cp) {
-        if (size < maxControlPoints) {
-            controlPoints[size] = cp;
-            size++;
-        }
-    }
-
-    void add(Vector _p, float _t) {
-        if (size < maxControlPoints) {
-            allControlPoints[allControlPointNumber].p = _p;
-            allControlPoints[allControlPointNumber].t = _t;
-            add(allControlPoints + allControlPointNumber);
-            allControlPointNumber++;
-        }
-
-    }
-};
+ControlPoint cp[maxControlPoints];
+size_t cpSize;
 
 class Shape {
 protected:
     static const size_t shapeResolution = 200;
-    ControlPointList *cp;
     Vector shapePoints[shapeResolution + 1];
     size_t shapePointSize;
     Color color;
 
 public:
-    Shape(ControlPointList *controlPoints) {
-        cp = controlPoints;
+    Shape() {
         shapePointSize = 0;
     }
 
@@ -277,10 +208,9 @@ class ConvexHull : public Shape {
 
     // Az algoritmust A. M. Andrew-tól publikálta 1979-ben. Az implementációt én csináltam.
     void monotoneChain() {
-        size_t cpSize = cp->getSize();
         Vector controlPoints[cpSize];
         for (size_t i = 0; i < cpSize; i++)
-            controlPoints[i] = cp->getP(i);
+            controlPoints[i] = cp[i].p;
         qsort(controlPoints, cpSize, sizeof(Vector), compareVectorsByX);
 
         Vector lowerHull[cpSize];
@@ -316,8 +246,7 @@ class ConvexHull : public Shape {
     }
 
 public:
-    ConvexHull(ControlPointList *controlPointList)
-            : Shape(controlPointList) {
+    ConvexHull() : Shape() {
         color = TURQUOISE;
     }
 
@@ -342,7 +271,7 @@ class CatmullRomSpline : public Shape {
     Vector endV;
 
     Vector getAi0(size_t prev) {
-        return cp->getP(prev);
+        return cp[prev].p;
     }
 
     Vector getAi1(size_t prev) {
@@ -351,10 +280,10 @@ class CatmullRomSpline : public Shape {
 
     Vector getAi2(size_t prev) {
         size_t i = prev;
-        Vector p0 = cp->getP(i);
-        Vector p1 = cp->getP(i + 1);
-        float t0 = cp->getT(i);
-        float t1 = cp->getT(i + 1);
+        Vector p0 = cp[i].p;
+        Vector p1 = cp[i + 1].p;
+        float t0 = cp[i].t;
+        float t1 = cp[i + 1].t;
         Vector tag1 = (p1 - p0) * 3
                 / pow(t1 - t0, 2);
         Vector tag2 = (v[i + 1] + v[i] * 2)
@@ -365,10 +294,10 @@ class CatmullRomSpline : public Shape {
 
     Vector getAi3(size_t prev) {
         size_t i = prev;
-        Vector p0 = cp->getP(i);
-        Vector p1 = cp->getP(i + 1);
-        float t0 = cp->getT(i);
-        float t1 = cp->getT(i + 1);
+        Vector p0 = cp[i].p;
+        Vector p1 = cp[i + 1].p;
+        float t0 = cp[i].t;
+        float t1 = cp[i + 1].t;
         Vector tag1 = (p0 - p1) * 2
                 / pow(t1 - t0, 3);
         Vector tag2 = (v[i + 1] + v[i])
@@ -378,9 +307,7 @@ class CatmullRomSpline : public Shape {
     }
 
 public:
-    CatmullRomSpline(ControlPointList *controlPointList)
-            : Shape(controlPointList)
-    {
+    CatmullRomSpline() : Shape() {
         startV = Vector(0.00001, 0.00001, 0.0);
         endV = Vector(0.00001, 0.00001, 0.0);
         pointsBetweenControlPoints = shapeResolution / maxControlPoints;
@@ -389,14 +316,14 @@ public:
 
     void computeV() {
         v[0] = startV;
-        v[cp->getSize() - 1] = endV;
-        for (size_t i = 1; i < cp->getSize() - 1; i++) {
-            Vector p0 = cp->getP(i);
-            Vector pp1 = cp->getP(i + 1);
-            Vector pm1 = cp->getP(i - 1);
-            float t0 = cp->getT(i);
-            float tp1 = cp->getT(i + 1);
-            float tm1 = cp->getT(i - 1);
+        v[cpSize - 1] = endV;
+        for (size_t i = 1; i < cpSize - 1; i++) {
+            Vector p0 = cp[i].p;
+            Vector pp1 = cp[i + 1].p;
+            Vector pm1 = cp[i - 1].p;
+            float t0 = cp[i].t;
+            float tp1 = cp[i + 1].t;
+            float tm1 = cp[i - 1].t;
 
             Vector tag1 = (pp1 - p0) / (tp1 - t0);
             Vector tag2 = (p0 - pm1) / (t0 - tm1);
@@ -411,7 +338,7 @@ public:
         Vector ai2 = getAi2(i);
         Vector ai3 = getAi3(i);
 
-        float t0 = cp->getT(i);
+        float t0 = cp[i].t;
 
         return ai3 * pow(t - t0, 3)
                 + ai2 * pow(t - t0, 2)
@@ -420,15 +347,14 @@ public:
     }
 
     void computeShape() {
-        size_t cpSize = cp->getSize();
         unsigned points = pointsBetweenControlPoints;
         shapePointSize = 0;
 
         computeV();
         for (size_t i = 0; i < cpSize - 1; i++)
             for (size_t j = i * points; j < (i + 1) * points; j++) {
-                float t = cp->getT(i) + (
-                        ((cp->getT(i + 1) - cp->getT(i)) / (float) points) * (j - (i * (float) points))
+                float t = cp[i].t + (
+                        ((cp[i + 1].t - cp[i].t) / (float) points) * (j - (i * (float) points))
                 );
                 shapePoints[j] = getPos(t, i);
                 shapePointSize = j + 1;
@@ -439,32 +365,29 @@ public:
 class BezierCurve : public Shape {
     Vector getPos(float t, size_t i, size_t m) {
         if (m == 0)
-            return cp->getP(i);
+            return cp[i].p;
 
         return getPos(t, i - 1, m - 1) * t +
                 getPos(t, i, m - 1) * (1.0 - t);
     }
 
 public:
-    BezierCurve(ControlPointList *controlPointList)
-            : Shape(controlPointList) {
+    BezierCurve() : Shape() {
         color = RED;
     };
 
     Vector getPos(float t) {
-        return getPos(t, cp->getSize() - 1, cp->getSize() - 1);
+        return getPos(t, cpSize - 1, cpSize - 1);
     }
 
     void computeShape() {
-        float firstT = cp->getT(0);
-        float lastT = cp->getT(cp->getSize() - 1);
+        float firstT = cp[0].t;
+        float lastT = cp[cpSize - 1].t;
         float range = lastT - firstT;
-        size_t i = 0;
+        shapePointSize = 0;
         for (float t = firstT; t < lastT; t += range / (float) shapeResolution) {
             float t1 = (t - firstT) / range;
-            shapePoints[i] = getPos(t1);
-            shapePointSize = i;
-            i++;
+            shapePoints[shapePointSize++] = getPos(t1);
         }
     }
 };
@@ -505,8 +428,7 @@ class CatmullClarkCurve : public Shape {
     }
 
 public:
-    CatmullClarkCurve(ControlPointList *controlPointList)
-            : Shape(controlPointList) {
+    CatmullClarkCurve() : Shape() {
         color = BLUE;
     };
 
@@ -516,9 +438,9 @@ public:
         size_t newCurveSize;
         size_t oldCurveSize;
 
-        newCurveSize = cp->getSize();
-        for (size_t i = 0; i < cp->getSize(); i++)
-            newCurve[i] = cp->getP(i);
+        newCurveSize = cpSize;
+        for (size_t i = 0; i < cpSize; i++)
+            newCurve[i] = cp[i].p;
 
         while (newCurveSize < shapeResolution / 2) {
             copyArray(newCurve, newCurveSize, oldCurve, &oldCurveSize);
@@ -580,37 +502,51 @@ public:
 
 } camera;
 
-ControlPointList currentControlPoints;
+void addControlPoint(Vector p, float t) {
+    if (cpSize < maxControlPoints) {
+        cp[cpSize].p = p;
+        cp[cpSize].t = t;
+        cpSize++;
+    }
+}
+
+ControlPoint * getControlPointAtPos(Vector p) {
+    for (int i = 0; i < cpSize; i++) {
+        Vector distance = p - cp[i].p;
+        if (distance.Length() < circleRadius)
+            return &cp[i];
+    }
+    return NULL;
+}
+
 ControlPoint *followedControlPoint;
 Vector followStartPoint;
-ConvexHull convexHull(&currentControlPoints);
-CatmullRomSpline crSpline(&currentControlPoints);
-BezierCurve bezier(&currentControlPoints);
-CatmullClarkCurve clark(&currentControlPoints);
+ConvexHull convexHull;
+CatmullRomSpline crSpline;
+BezierCurve bezier;
+CatmullClarkCurve clark;
 Shape *shapes[4] = {&convexHull, &crSpline, &bezier, &clark};
 
 // Inicializacio, a program futasanak kezdeten, az OpenGL kontextus letrehozasa utan hivodik meg (ld. main() fv.)
 void onInitialization() {
     glViewport(0, 0, screenWidth, screenHeight);
     currentSate = ADDING_POINTS;
-    allControlPointNumber = 0;
+    cpSize = 0;
 
     //TEST
-    /*
     const Vector q0(30.0, 41.0);
     const Vector q1(41.0, 67.0);
     const Vector q2(62.0, 65.0);
     const Vector q3(73.0, 40.0);
     const Vector q4(24.0, 50.0);
 
-    currentControlPoints.add(q2, 0.8);
-    currentControlPoints.add(q0, 1.2);
-    currentControlPoints.add(q3, 1.5);
-    currentControlPoints.add(q1, 2.1);
-    currentControlPoints.add(q4, 3.1);
+    addControlPoint(q2, 0.8);
+    addControlPoint(q0, 1.2);
+    addControlPoint(q3, 1.5);
+    addControlPoint(q1, 2.1);
+    addControlPoint(q4, 3.1);
     for (size_t i = 0; i < 4; i++)
         shapes[i]->computeShape();
-    */
 
 }
 
@@ -640,16 +576,16 @@ void moveControlPoints(float ts, long circulationStartTime) {
     double periodPart = timePastInPeriod / period;
     double angle = 2 * Pi * periodPart;
 
-    for (size_t i = 0; i < currentControlPoints.getSize(); i += 2) {
-        float newX = (float) (currentControlPoints.getOriginalP(i).x - radius * cos(angle));
-        float newY = (float) (currentControlPoints.getOriginalP(i).y + radius * sin(angle) - radius);
-        currentControlPoints.setP(i, Vector(newX, newY));
+    for (size_t i = 0; i < cpSize; i += 2) {
+        float newX = (float) (cp[i].originalP.x - radius * cos(angle));
+        float newY = (float) (cp[i].originalP.y + radius * sin(angle) - radius);
+        cp[i].p = Vector(newX, newY);
     }
 
-    for (size_t i = 1; i < currentControlPoints.getSize(); i += 2) {
-        float newX = (float) (currentControlPoints.getOriginalP(i).x + radius * cos(angle));
-        float newY = (float) (currentControlPoints.getOriginalP(i).y + radius * sin(angle) - radius);
-        currentControlPoints.setP(i, Vector(newX, newY));
+    for (size_t i = 1; i < cpSize; i += 2) {
+        float newX = (float) (cp[i].originalP.x + radius * cos(angle));
+        float newY = (float) (cp[i].originalP.y + radius * sin(angle) - radius);
+        cp[i].p = Vector(newX, newY);
     }
 }
 
@@ -659,7 +595,7 @@ void SimulateWorld(float tstart, float tend) {
         for (float ts = tstart; ts < tend; ts += dt) {
             moveControlPoints(ts, circulationStartTime);
 
-            if (currentControlPoints.getSize() >= 2)
+            if (cpSize >= 2)
                 for (int i = 0; i < 4; i++)
                     shapes[i]->computeShape();
         }
@@ -678,19 +614,19 @@ void onDisplay() {
     gluOrtho2D(camera.left(), camera.right(), camera.bottom(), camera.top());
 
 
-    if (currentControlPoints.getSize() >= 2) {
+    if (cpSize >= 2) {
         for (size_t i = 0; i < 4; i++)
             shapes[i]->drawShape();
 
         glColor3f(BLACK.r, BLACK.g, BLACK.b);
-        for (size_t i = 0; i < currentControlPoints.getSize(); i++)
-            drawCircle(currentControlPoints.getP(i), circleRadius);
+        for (size_t i = 0; i < cpSize; i++)
+            drawCircle(cp[i].p, circleRadius);
     }
 
     else {
         glColor3f(BLACK.r, BLACK.g, BLACK.b);
-        for (size_t i = 0; i < currentControlPoints.getSize(); i++)
-            drawCircle(currentControlPoints.getP(i), circleRadius);
+        for (size_t i = 0; i < cpSize; i++)
+            drawCircle(cp[i].p, circleRadius);
     }
 
     glutSwapBuffers();                    // Buffercsere: rajzolas vege
@@ -702,8 +638,8 @@ void onKeyboard(unsigned char key, int x, int y) {
     if (key == ' ') {
         if (currentSate == ADDING_POINTS) {
             circulationStartTime = glutGet(GLUT_ELAPSED_TIME);
-            for (size_t i = 0; i < currentControlPoints.getSize(); i++)
-                currentControlPoints.setOriginalP(i, currentControlPoints.getP(i));
+            for (size_t i = 0; i < cpSize; i++)
+                cp[i].originalP = cp[i].p;
             currentSate = CIRCULATE;
         }
     }
@@ -721,9 +657,9 @@ void onMouse(int button, int state, int x, int y) {
 
         if (currentSate == ADDING_POINTS) {
             Vector pos = camera.getWorldPos(x, y, screenWidth, screenHeight);
-            if (currentControlPoints.getSize() < maxControlPoints) {
-                currentControlPoints.add(pos, clickTime / 1000.0f);
-                if (currentControlPoints.getSize() >= 2) {
+            if (cpSize < maxControlPoints) {
+                addControlPoint(pos, clickTime / 1000.0f);
+                if (cpSize >= 2) {
                     for (int i = 0; i < 4; i++)
                         shapes[i]->computeShape();
                 }
@@ -735,7 +671,7 @@ void onMouse(int button, int state, int x, int y) {
     if (button == GLUT_RIGHT_BUTTON && state == GLUT_DOWN) {
         if (currentSate == CIRCULATE || currentSate == CAMERA_MOVING) {
             Vector pos = camera.getWorldPos(x, y, screenWidth, screenHeight);
-            ControlPoint *clickedControlPoint = currentControlPoints.getControlPointAtPos(pos);
+            ControlPoint *clickedControlPoint = getControlPointAtPos(pos);
             if (clickedControlPoint != NULL) {
                 followedControlPoint = clickedControlPoint;
                 followStartPoint = clickedControlPoint->p;

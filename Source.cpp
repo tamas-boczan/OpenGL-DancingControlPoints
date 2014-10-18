@@ -144,12 +144,10 @@ const float circleRadius = 2.0;
 
 const Color BLACK = Color(0.0f, 0.0f, 0.0f);
 const Color GREY = Color(0.85f, 0.85f, 0.85f);
-// Türkíz szín forrása: www.opengl.org/discussion_boards/showthread.php/132502-Color-tables
-const Color TURQUOISE = Color(0.678f, 0.918f, 0.918f);
-const Color RED = Color(1.0f, 0.0f, 0.0f);
-const Color GREEN = Color(0.0f, 0.6f, 0.1f);
-const Color BLUE = Color(0.0f, 0.0f, 1.0f);
-
+const Color TURQUOISE = Color(0.65f, 0.96f, 0.94f);
+const Color RED = Color(0.5f, 0.0f, 0.0f);
+const Color GREEN = Color(0.0f, 0.5f, 0.0f);
+const Color BLUE = Color(0.0f, 0.0f, 0.5f);
 
 long currentTime;
 long circulationStartTime;
@@ -183,10 +181,6 @@ public:
         }
     }
 
-    ControlPoint *getControlPoint(size_t i) {
-        return controlPoints[i];
-    }
-
     ControlPoint *getControlPointAtPos(Vector p) {
         for (int i = 0; i < size; i++) {
             Vector distance = p - controlPoints[i]->p;
@@ -194,10 +188,6 @@ public:
                 return controlPoints[i];
         }
         return NULL;
-    }
-
-    void setControlPoint(size_t i, ControlPoint *cp) {
-        controlPoints[i] = cp;
     }
 
     Vector getP(size_t i) {
@@ -240,10 +230,6 @@ public:
         }
 
     }
-
-    void removeLastReference() {
-        size--;
-    }
 };
 
 class Shape {
@@ -252,6 +238,7 @@ protected:
     ControlPointList *cp;
     Vector shapePoints[shapeResolution + 1];
     size_t shapePointSize;
+    Color color;
 
 public:
     Shape(ControlPointList *controlPoints) {
@@ -262,7 +249,7 @@ public:
     virtual void computeShape() {
     }
 
-    virtual void drawShape(Color color) {
+    virtual void drawShape() {
         glColor3f(color.r, color.g, color.b);
         glBegin(GL_LINE_STRIP);
         for (size_t i = 0; i < shapePointSize; i++)
@@ -272,7 +259,7 @@ public:
 };
 
 class ConvexHull : public Shape {
-    bool isCounterClockWise(Vector p1, Vector p2, Vector p3) {
+    bool isClockWise(Vector p1, Vector p2, Vector p3) {
         Vector side1 = p2 - p1;
         Vector side2 = p3 - p1;
         Vector meroleges = side1 % side2;
@@ -280,66 +267,50 @@ class ConvexHull : public Shape {
         return (direction <= 0.0);
     }
 
-    bool isLeftFrom(Vector v1, Vector v2) {
-        if (v1.x < v2.x)
-            return true;
-        if (v1.x > v2.x)
-            return false;
-        return (v1.y < v2.y);
+    static int compareVectorsByX(const void * v1, const void * v2) {
+        if ( ((Vector*) v1)->x < ((Vector*) v2)->x) return -1;
+        if ( ((Vector*) v1)->x > ((Vector*) v2)->x) return 1;
+        if ( ((Vector*) v1)-> x == ((Vector*) v2)->x)
+            return ((Vector*) v1)->y < ((Vector*) v2)->y;
+        return 0;
     }
 
-    void sortControlPointsByX(ControlPointList *cpList) {
-        size_t n = cpList->getSize();
-        for (size_t c = 0; c < (n - 1); c++) {
-            for (size_t d = 0; d < n - c - 1; d++) {
-                if (isLeftFrom(cpList->getP(d + 1), cpList->getP(d))) {
-                    ControlPoint *temp = cpList->getControlPoint(d);
-                    cpList->setControlPoint(d, cpList->getControlPoint(d + 1));
-                    cpList->setControlPoint(d + 1, temp);
-                }
-            }
-        }
-    }
-
+    // Az algoritmust A. M. Andrew-tól publikálta 1979-ben. Az implementációt én csináltam.
     void monotoneChain() {
-        ControlPointList orderedCp(*cp);
-        sortControlPointsByX(&orderedCp);
+        size_t cpSize = cp->getSize();
+        Vector controlPoints[cpSize];
+        for (size_t i = 0; i < cpSize; i++)
+            controlPoints[i] = cp->getP(i);
+        qsort(controlPoints, cpSize, sizeof(Vector), compareVectorsByX);
 
-        ControlPointList lowerHull;
-        for (size_t i = 0; i < orderedCp.getSize(); i++) {
-            size_t hullSize = lowerHull.getSize();
-            while (hullSize >= 2 && !isCounterClockWise(lowerHull.getP(hullSize - 2), lowerHull.getP(hullSize - 1), orderedCp.getP(i))) {
-                lowerHull.removeLastReference();
-                hullSize = lowerHull.getSize();
-            }
-            lowerHull.add(orderedCp.getControlPoint(i));
+        Vector lowerHull[cpSize];
+        size_t lowerHullSize = 0;
+        for (size_t i = 0; i < cpSize; i++) {
+            while (lowerHullSize >= 2
+                    && isClockWise(lowerHull[lowerHullSize - 2], lowerHull[lowerHullSize - 1], controlPoints[i]))
+                lowerHullSize--;
+            lowerHull[lowerHullSize++] = controlPoints[i];
         }
 
-        ControlPointList upperHull;
-        for (size_t i = orderedCp.getSize() - 1; i > 0; i--) {
-            size_t hullSize = upperHull.getSize();
-            while (hullSize >= 2 && !isCounterClockWise(upperHull.getP(hullSize - 2), upperHull.getP(hullSize - 1), orderedCp.getP(i))) {
-                upperHull.removeLastReference();
-                hullSize = upperHull.getSize();
-            }
-            upperHull.add(orderedCp.getControlPoint(i));
+        Vector upperHull[cpSize];
+        size_t upperHullSize = 0;
+        for (int i = (int) (cpSize - 1); i >= 0; i--) {
+            while (upperHullSize >= 2
+                    && isClockWise(upperHull[upperHullSize - 2], upperHull[upperHullSize - 1], controlPoints[i]))
+                upperHullSize--;
+            upperHull[upperHullSize++] = controlPoints[i];
         }
 
-        if (lowerHull.getControlPoint(lowerHull.getSize() - 1) ==
-                upperHull.getControlPoint(0))
-            lowerHull.removeLastReference();
-
-        if (upperHull.getControlPoint(upperHull.getSize() - 1) ==
-                lowerHull.getControlPoint(0))
-            upperHull.removeLastReference();
+        lowerHullSize --;
+        upperHullSize --;
 
         shapePointSize = 0;
-        for (size_t i = 0; i < lowerHull.getSize(); i++) {
-            shapePoints[shapePointSize] = lowerHull.getP(i);
+        for (size_t i = 0; i < lowerHullSize; i++) {
+            shapePoints[shapePointSize] = lowerHull[i];
             shapePointSize++;
         }
-        for (size_t i = 0; i < upperHull.getSize(); i++) {
-            shapePoints[shapePointSize] = upperHull.getP(i);
+        for (size_t i = 0; i < upperHullSize; i++) {
+            shapePoints[shapePointSize] = upperHull[i];
             shapePointSize++;
         }
     }
@@ -347,13 +318,14 @@ class ConvexHull : public Shape {
 public:
     ConvexHull(ControlPointList *controlPointList)
             : Shape(controlPointList) {
+        color = TURQUOISE;
     }
 
     void computeShape() {
         monotoneChain();
     }
 
-    void drawShape(Color color) {
+    void drawShape() {
         glColor3f(color.r, color.g, color.b);
         glBegin(GL_TRIANGLE_FAN);
         for (size_t i = 0; i < shapePointSize; i++)
@@ -412,9 +384,10 @@ public:
         startV = Vector(0.00001, 0.00001, 0.0);
         endV = Vector(0.00001, 0.00001, 0.0);
         pointsBetweenControlPoints = shapeResolution / maxControlPoints;
+        color = GREEN;
     }
 
-    void ComputeV() {
+    void computeV() {
         v[0] = startV;
         v[cp->getSize() - 1] = endV;
         for (size_t i = 1; i < cp->getSize() - 1; i++) {
@@ -431,7 +404,7 @@ public:
         }
     }
 
-    Vector GetPos(float t, size_t prevIndex) {
+    Vector getPos(float t, size_t prevIndex) {
         size_t i = prevIndex;
         Vector ai0 = getAi0(i);
         Vector ai1 = getAi1(i);
@@ -451,13 +424,13 @@ public:
         unsigned points = pointsBetweenControlPoints;
         shapePointSize = 0;
 
-        ComputeV();
+        computeV();
         for (size_t i = 0; i < cpSize - 1; i++)
             for (size_t j = i * points; j < (i + 1) * points; j++) {
                 float t = cp->getT(i) + (
                         ((cp->getT(i + 1) - cp->getT(i)) / (float) points) * (j - (i * (float) points))
                 );
-                shapePoints[j] = GetPos(t, i);
+                shapePoints[j] = getPos(t, i);
                 shapePointSize = j + 1;
             }
     }
@@ -475,9 +448,10 @@ class BezierCurve : public Shape {
 public:
     BezierCurve(ControlPointList *controlPointList)
             : Shape(controlPointList) {
+        color = RED;
     };
 
-    Vector GetPos(float t) {
+    Vector getPos(float t) {
         return getPos(t, cp->getSize() - 1, cp->getSize() - 1);
     }
 
@@ -488,12 +462,11 @@ public:
         size_t i = 0;
         for (float t = firstT; t < lastT; t += range / (float) shapeResolution) {
             float t1 = (t - firstT) / range;
-            shapePoints[i] = GetPos(t1);
+            shapePoints[i] = getPos(t1);
             shapePointSize = i;
             i++;
         }
     }
-
 };
 
 class CatmullClarkCurve : public Shape {
@@ -534,7 +507,7 @@ class CatmullClarkCurve : public Shape {
 public:
     CatmullClarkCurve(ControlPointList *controlPointList)
             : Shape(controlPointList) {
-        shapePointSize = 0;
+        color = BLUE;
     };
 
     void computeShape() {
@@ -562,7 +535,6 @@ public:
         }
         copyArray(newCurve, newCurveSize, shapePoints, &shapePointSize);
     }
-
 };
 
 class Camera {
@@ -622,6 +594,23 @@ void onInitialization() {
     glViewport(0, 0, screenWidth, screenHeight);
     currentSate = ADDING_POINTS;
     allControlPointNumber = 0;
+
+    //TEST
+    /*
+    const Vector q0(30.0, 41.0);
+    const Vector q1(41.0, 67.0);
+    const Vector q2(62.0, 65.0);
+    const Vector q3(73.0, 40.0);
+    const Vector q4(24.0, 50.0);
+
+    currentControlPoints.add(q2, 0.8);
+    currentControlPoints.add(q0, 1.2);
+    currentControlPoints.add(q3, 1.5);
+    currentControlPoints.add(q1, 2.1);
+    currentControlPoints.add(q4, 3.1);
+    for (size_t i = 0; i < 4; i++)
+        shapes[i]->computeShape();
+    */
 
 }
 
@@ -690,10 +679,8 @@ void onDisplay() {
 
 
     if (currentControlPoints.getSize() >= 2) {
-        convexHull.drawShape(TURQUOISE);
-        crSpline.drawShape(GREEN);
-        bezier.drawShape(RED);
-        clark.drawShape(BLUE);
+        for (size_t i = 0; i < 4; i++)
+            shapes[i]->drawShape();
 
         glColor3f(BLACK.r, BLACK.g, BLACK.b);
         for (size_t i = 0; i < currentControlPoints.getSize(); i++)
@@ -729,7 +716,7 @@ void onKeyboardUp(unsigned char key, int x, int y) {
 
 // Eger esemenyeket lekezelo fuggveny
 void onMouse(int button, int state, int x, int y) {
-    if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN) {
+    if (button == GLUT_LEFT_BUTTON && state == GLUT_UP) {
         long clickTime = glutGet(GLUT_ELAPSED_TIME);
 
         if (currentSate == ADDING_POINTS) {
@@ -740,7 +727,6 @@ void onMouse(int button, int state, int x, int y) {
                     for (int i = 0; i < 4; i++)
                         shapes[i]->computeShape();
                 }
-
                 glutPostRedisplay();
             }
         }

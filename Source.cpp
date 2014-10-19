@@ -190,30 +190,35 @@ public:
 };
 
 class ConvexHull : public Shape {
-    bool isClockWise(Vector p1, Vector p2, Vector p3) {
-        Vector side1 = p2 - p1;
-        Vector side2 = p3 - p1;
+    bool isClockWise(Vector *p1, Vector *p2, Vector *p3) {
+        Vector side1 = *p2 - *p1;
+        Vector side2 = *p3 - *p1;
         Vector meroleges = side1 % side2;
         float direction = meroleges.z;
         return (direction <= 0.0);
     }
 
-    static int compareVectorsByX(const void * v1, const void * v2) {
-        if ( ((Vector*) v1)->x < ((Vector*) v2)->x) return -1;
-        if ( ((Vector*) v1)->x > ((Vector*) v2)->x) return 1;
-        if ( ((Vector*) v1)-> x == ((Vector*) v2)->x)
-            return ((Vector*) v1)->y < ((Vector*) v2)->y;
-        return 0;
+    static int compareVectorsByX(const void *v1, const void *v2) {
+        float x1 = (*(Vector **) v1)->x;
+        float x2 = (*(Vector **) v2)->x;
+        if (x1 != x2)
+            return x1 > x2;
+
+        else {
+            float y1 = (*(Vector **) v1)->y;
+            float y2 = (*(Vector **) v2)->y;
+            return y1 > y2;
+        }
     }
 
     // Az algoritmust A. M. Andrew publikálta 1979-ben. Az implementációt én csináltam.
     void monotoneChain() {
-        Vector sortedCp[cpSize];
+        Vector *sortedCp[cpSize];
         for (size_t i = 0; i < cpSize; i++)
-            sortedCp[i] = cp[i].p;
-        qsort(sortedCp, cpSize, sizeof(Vector), compareVectorsByX);
+            sortedCp[i] = &cp[i].p;
+        qsort(sortedCp, cpSize, sizeof(Vector *), compareVectorsByX);
 
-        Vector lowerHull[cpSize];
+        Vector *lowerHull[cpSize];
         size_t lowerHullSize = 0;
         for (size_t i = 0; i < cpSize; i++) {
             while (lowerHullSize >= 2
@@ -222,7 +227,7 @@ class ConvexHull : public Shape {
             lowerHull[lowerHullSize++] = sortedCp[i];
         }
 
-        Vector upperHull[cpSize];
+        Vector *upperHull[cpSize];
         size_t upperHullSize = 0;
         for (int i = (int) (cpSize - 1); i >= 0; i--) {
             while (upperHullSize >= 2
@@ -231,15 +236,15 @@ class ConvexHull : public Shape {
             upperHull[upperHullSize++] = sortedCp[i];
         }
 
-        lowerHullSize --;
-        upperHullSize --;
+        lowerHullSize--;
+        upperHullSize--;
 
         shapePointSize = 0;
         for (size_t i = 0; i < lowerHullSize; i++)
-            shapePoints[shapePointSize++] = lowerHull[i];
+            shapePoints[shapePointSize++] = *lowerHull[i];
 
         for (size_t i = 0; i < upperHullSize; i++)
-            shapePoints[shapePointSize++] = upperHull[i];
+            shapePoints[shapePointSize++] = *upperHull[i];
     }
 
 public:
@@ -390,26 +395,26 @@ public:
 };
 
 class CatmullClarkCurve : public Shape {
-    Vector halfSegment(Vector p1, Vector p2){
+    Vector halfSegment(Vector p1, Vector p2) {
         return (p1 + p2) / 2.0;
     }
 
-    Vector centroidOfTriangle (Vector p1, Vector p2, Vector p3, float weightP1 = 0.3333, float weightP2 = 0.3333, float weightP3 = 0.3333){
+    Vector centroidOfTriangle(Vector p1, Vector p2, Vector p3, float weightP1 = 0.3333, float weightP2 = 0.3333, float weightP3 = 0.3333) {
         return p1 * weightP1 + p2 * weightP2 + p3 * weightP3;
     }
 
-    void copyArray(Vector from[], size_t fromSize, Vector to[], size_t * toSize){
+    void copyArray(Vector from[], size_t fromSize, Vector to[], size_t *toSize) {
         for (size_t i = 0; i < fromSize; i++)
             to[i] = from[i];
         *toSize = fromSize;
     }
 
-    void computeSegmentHalves(Vector *oldCurve, size_t oldCurveSize, Vector *halves){
+    void computeSegmentHalves(Vector *oldCurve, size_t oldCurveSize, Vector *halves) {
         for (size_t i = 1; i < oldCurveSize; i++)
             halves[i - 1] = halfSegment(oldCurve[i - 1], oldCurve[i]);
     }
 
-    void computeCentroids(Vector oldCurve[], size_t oldCurveSize, Vector halves[], Vector centroids[]){
+    void computeCentroids(Vector oldCurve[], size_t oldCurveSize, Vector halves[], Vector centroids[]) {
         size_t halvesSize = oldCurveSize - 1;
         centroids[0] = oldCurve[0];
         centroids[oldCurveSize - 1] = oldCurve[oldCurveSize - 1];
@@ -417,7 +422,7 @@ class CatmullClarkCurve : public Shape {
             centroids[i] = centroidOfTriangle(halves[i - 1], oldCurve[i], halves[i], 0.25, 0.5, 0.25);
     }
 
-    void mergeAlternating(Vector arr1[], size_t arr1Size, Vector arr2[], size_t arr2Size, Vector newArr[]){
+    void mergeAlternating(Vector arr1[], size_t arr1Size, Vector arr2[], size_t arr2Size, Vector newArr[]) {
         for (size_t i = 0; i < arr1Size; i++)
             newArr[2 * i] = arr1[i];
         for (size_t i = 0; i < arr2Size; i++)
@@ -508,7 +513,7 @@ void addControlPoint(Vector p, float t) {
     }
 }
 
-ControlPoint * getControlPointAtPos(Vector p) {
+ControlPoint *getControlPointAtPos(Vector p) {
     for (size_t i = 0; i < cpSize; i++) {
         Vector distance = p - cp[i].p;
         if (distance.Length() < circleRadius)
@@ -619,7 +624,7 @@ void onKeyboard(unsigned char key, int x, int y) {
     if (key == ' ' && currentSate == ADDING_POINTS) {
         circulationStartTime = glutGet(GLUT_ELAPSED_TIME);
         currentSate = CIRCULATE;
-        }
+    }
 }
 
 // Billentyuzet esemenyeket lekezelo fuggveny (felengedes)
@@ -636,7 +641,7 @@ void onMouse(int button, int state, int x, int y) {
             addControlPoint(pos, clickTime / 1000.0f);
             if (cpSize >= 2)
                 for (size_t i = 0; i < 4; i++)
-                    shapes[i] -> computeShape();
+                    shapes[i]->computeShape();
             glutPostRedisplay();
         }
     }

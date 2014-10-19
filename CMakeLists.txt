@@ -18,8 +18,10 @@ INCLUDE_DIRECTORIES(${OPENGL_INCLUDE_DIR})
 TARGET_LINK_LIBRARIES(${ProjectId} ${OPENGL_LIBRARIES} ${GLUT_LIBRARIES})
 
 # defining Debug and Release build options
-set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -pedantic -Wall -Wextra -DDEBUG -g")
-set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -pedantic -Wall -Wextra -g0 -o3")
+if (UNIX)
+  set(CMAKE_CXX_FLAGS_DEBUG "-pedantic -Wall -Wextra -DDEBUG -g")
+  set(CMAKE_CXX_FLAGS_RELEASE "-pedantic -Wall -Wextra -g0 -o3")
+endif ()
 
 # debug build command: g++ Source.cpp -pedantic -Wall -Wextra -DDEBUG -g -lglut -lGLU -lGL -o grafika
 # release build command: g++ Source.cpp -pedantic -Wall -Wextra -g0 -03 -lglut -lGLU -lGL -o grafika

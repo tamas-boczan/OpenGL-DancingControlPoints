@@ -272,15 +272,15 @@ class CatmullRomSpline : public Shape {
     Vector startV;
     Vector endV;
 
-    Vector getAi0(size_t prev) {
+    Vector a0(size_t prev) {
         return cp[prev].p;
     }
 
-    Vector getAi1(size_t prev) {
+    Vector a1(size_t prev) {
         return v[prev];
     }
 
-    Vector getAi2(size_t prev) {
+    Vector a2(size_t prev) {
         size_t i = prev;
         Vector p0 = cp[i].p;
         Vector p1 = cp[i + 1].p;
@@ -294,7 +294,7 @@ class CatmullRomSpline : public Shape {
         return tag1 - tag2;
     }
 
-    Vector getAi3(size_t prev) {
+    Vector a3(size_t prev) {
         size_t i = prev;
         Vector p0 = cp[i].p;
         Vector p1 = cp[i + 1].p;
@@ -335,10 +335,10 @@ public:
 
     Vector getPos(float t, size_t prevIndex) {
         size_t i = prevIndex;
-        Vector ai0 = getAi0(i);
-        Vector ai1 = getAi1(i);
-        Vector ai2 = getAi2(i);
-        Vector ai3 = getAi3(i);
+        Vector ai0 = a0(i);
+        Vector ai1 = a1(i);
+        Vector ai2 = a2(i);
+        Vector ai3 = a3(i);
 
         float t0 = cp[i].t;
 
@@ -365,12 +365,19 @@ public:
 };
 
 class BezierCurve : public Shape {
-    Vector getPos(float t, size_t i, size_t m) {
-        if (m == 0)
-            return cp[i].p;
+    float B (int i, float t) {
+        int n = (int) (cpSize - 1);
+        float choose = 1;
+        for (int j = 1; j <= i; j++)
+            choose *=(float) (n - j + 1) / j;
+        return (float) (choose * pow(t, i) * pow(1 - t, n - i));
+    }
 
-        return getPos(t, i - 1, m - 1) * t +
-                getPos(t, i, m - 1) * (1.0 - t);
+    Vector r (float t) {
+        Vector rr(0, 0);
+        for (int i = 0; i < cpSize; i++)
+            rr = rr + cp[i].p * B(i, t);
+        return rr;
     }
 
 public:
@@ -378,18 +385,12 @@ public:
         color = RED;
     };
 
-    Vector getPos(float t) {
-        return getPos(t, cpSize - 1, cpSize - 1);
-    }
-
     void computeShape() {
-        float firstT = cp[0].t;
-        float lastT = cp[cpSize - 1].t;
-        float range = lastT - firstT;
+        float range = cp[cpSize - 1].t - cp[0].t;
         shapePointSize = 0;
-        for (float t = firstT; t < lastT; t += range / (float) shapeResolution) {
-            float t1 = (t - firstT) / range;
-            shapePoints[shapePointSize++] = getPos(t1);
+        for (float t = cp[0].t; t < cp[cpSize - 1].t; t += range / (float) shapeResolution) {
+            float t1 = (t - cp[0].t) / range;
+            shapePoints[shapePointSize++] = r(t1);
         }
     }
 };

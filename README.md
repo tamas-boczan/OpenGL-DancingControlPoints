@@ -3,6 +3,8 @@ OpenGL-DancingControlPoints
 
 OpenGL homework with curves
 
+ ![Screenshot](screenshot.png "Screenshot")
+
 Feladat
 ------------
 Készítsen *„Síkon táncoló kontrollpontok”* programot.

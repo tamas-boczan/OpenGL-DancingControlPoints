@@ -142,6 +142,7 @@ const int screenHeight = 600;
 const size_t maxControlPoints = 10;
 const float circleRadius = 2.0;
 
+// színek
 const Color BLACK = Color(0.0f, 0.0f, 0.0f);
 const Color GREY = Color(0.85f, 0.85f, 0.85f);
 const Color TURQUOISE = Color(0.65f, 0.96f, 0.94f);
@@ -213,13 +214,25 @@ class ConvexHull : public Shape {
 
     // Az algoritmust A. M. Andrew publikálta 1979-ben. Az implementációt én csináltam.
     void monotoneChain() {
+        //  Sort the points of P by x-coordinate (in case of a tie, sort by y-coordinate).
         Vector *sortedCp[cpSize];
         for (size_t i = 0; i < cpSize; i++)
             sortedCp[i] = &cp[i].p;
         qsort(sortedCp, cpSize, sizeof(Vector *), compareVectorsByX);
 
+        //  Initialize U and L as empty lists.
+        //  The lists will hold the vertices of upper and lower hulls respectively.
         Vector *lowerHull[cpSize];
         size_t lowerHullSize = 0;
+        Vector *upperHull[cpSize];
+        size_t upperHullSize = 0;
+
+
+        //  for i = 1, 2, ..., n:
+        //  while L contains at least two points and the sequence of last two points
+        //  of L and the point P[i] does not make a counter-clockwise turn:
+        //  remove the last point from L
+        //  append P[i] to L
         for (size_t i = 0; i < cpSize; i++) {
             while (lowerHullSize >= 2
                     && isClockWise(lowerHull[lowerHullSize - 2], lowerHull[lowerHullSize - 1], sortedCp[i]))
@@ -227,8 +240,12 @@ class ConvexHull : public Shape {
             lowerHull[lowerHullSize++] = sortedCp[i];
         }
 
-        Vector *upperHull[cpSize];
-        size_t upperHullSize = 0;
+
+        //  for i = n, n-1, ..., 1:
+        //  while U contains at least two points and the sequence of last two points
+        //  of U and the point P[i] does not make a counter-clockwise turn:
+        //  remove the last point from U
+        //  append P[i] to U
         for (int i = (int) (cpSize - 1); i >= 0; i--) {
             while (upperHullSize >= 2
                     && isClockWise(upperHull[upperHullSize - 2], upperHull[upperHullSize - 1], sortedCp[i]))
@@ -236,9 +253,12 @@ class ConvexHull : public Shape {
             upperHull[upperHullSize++] = sortedCp[i];
         }
 
+        //  Remove the last point of each list (it's the same as the first point of the other list).
         lowerHullSize--;
         upperHullSize--;
 
+        //  Concatenate L and U to obtain the convex hull of P.
+        //  Points in the result will be listed in counter-clockwise order.
         shapePointSize = 0;
         for (size_t i = 0; i < lowerHullSize; i++)
             shapePoints[shapePointSize++] = *lowerHull[i];
@@ -417,15 +437,23 @@ class CatmullClarkCurve : public Shape {
 
     void computeCentroids(Vector oldCurve[], size_t oldCurveSize, Vector halves[], Vector centroids[]) {
         size_t halvesSize = oldCurveSize - 1;
+        // az 1. és utolsó pont nem változik
         centroids[0] = oldCurve[0];
         centroids[oldCurveSize - 1] = oldCurve[oldCurveSize - 1];
+        //  az 1. háromszög: halves[0], oldCurve[1], halves[1]
+        // utolsó háromszög: halves[oldCurveSize - 3], oldCurve[oldCurveSize - 2], halves[oldCurveSize - 2]
         for (size_t i = 1; i < halvesSize; i++)
             centroids[i] = centroidOfTriangle(halves[i - 1], oldCurve[i], halves[i], 0.25, 0.5, 0.25);
     }
 
+    // két tömböt össze-merge-el, egyszer az elsőből vesz elemet, aztán a másikból
     void mergeAlternating(Vector arr1[], size_t arr1Size, Vector arr2[], size_t arr2Size, Vector newArr[]) {
+        // arr1: centroids, oldCurveSize
+        // arr2: halves, halvesSize
+        // 0 -> newCurveSize - 1 = oldCurveSize  * 2 - 2
         for (size_t i = 0; i < arr1Size; i++)
             newArr[2 * i] = arr1[i];
+        // 1 -> newCurveSize - 2 = oldCurveSize * 2 - 3
         for (size_t i = 0; i < arr2Size; i++)
             newArr[2 * i + 1] = arr2[i];
     }
@@ -441,23 +469,30 @@ public:
         size_t newCurveSize;
         size_t oldCurveSize;
 
+        // a new curve-öt a kontrollpontokra inicializálja
         newCurveSize = cpSize;
         for (size_t i = 0; i < cpSize; i++)
             newCurve[i] = cp[i].p;
 
         while (newCurveSize < shapeResolution / 2) {
+            // átmásolja newCurve-öt oldCurve-be
             copyArray(newCurve, newCurveSize, oldCurve, &oldCurveSize);
 
+            // kiszámítja az old Curve szakaszainak felezőpontjait, 1-el kevesebb felezőpont van, mint pont.
             size_t halvesSize = oldCurveSize - 1;
             Vector halves[halvesSize];
             computeSegmentHalves(oldCurve, oldCurveSize, halves);
 
+            // kiszámítja, hová kell eltolni az old Curve pontjait, hogy a háromszög súlypontjába kerüljenek
             Vector centroids[oldCurveSize];
             computeCentroids(oldCurve, oldCurveSize, halves, centroids);
 
+            // merge: centroids + halves
             mergeAlternating(centroids, oldCurveSize, halves, halvesSize, newCurve);
             newCurveSize = oldCurveSize + halvesSize;
         }
+
+        // lecseréli shapePoints-ot newCurve-re
         copyArray(newCurve, newCurveSize, shapePoints, &shapePointSize);
     }
 };
@@ -558,6 +593,7 @@ void moveControlPoints(float ts, long circulationStartTime) {
     double Pi = 3.14159;
     if (ts < circulationStartTime)
         ts = circulationStartTime;
+    // azért adjuk hozzá, hogy a kör tetejéről induljon a periódus, a periódus 1/4-edénél van a kör tetején.
     ts += 0.25 * period;
     double periodsDone = floor((ts - circulationStartTime) / period);
     double timePastInPeriod = ts - circulationStartTime - (periodsDone * period);
@@ -622,6 +658,8 @@ void onDisplay() {
 
 // Billentyuzet esemenyeket lekezelo fuggveny (lenyomas)
 void onKeyboard(unsigned char key, int x, int y) {
+    // space-re elindítjuk a keringést, de csak ha még a keringés előtti állapotban vagyunk
+    // amúgy nem törődünk a Space-el
     if (key == ' ' && currentSate == ADDING_POINTS) {
         circulationStartTime = glutGet(GLUT_ELAPSED_TIME);
         currentSate = CIRCULATE;
@@ -637,6 +675,8 @@ void onKeyboardUp(unsigned char key, int x, int y) {
 void onMouse(int button, int state, int x, int y) {
     if (button == GLUT_LEFT_BUTTON && state == GLUT_UP && currentSate == ADDING_POINTS) {
         long clickTime = glutGet(GLUT_ELAPSED_TIME);
+
+        // felvesz egy új kontrollpontot és újraszámolja a görbét, de csak a pontfelvétel állapotában, ha még nem értük el a maxot
         Vector pos = camera.getWorldPos(x, y, screenWidth, screenHeight);
         if (cpSize < maxControlPoints) {
             addControlPoint(pos, clickTime / 1000.0f);
@@ -660,8 +700,6 @@ void onMouse(int button, int state, int x, int y) {
         }
         glutPostRedisplay();
     }
-
-
 }
 
 // Eger mozgast lekezelo fuggveny

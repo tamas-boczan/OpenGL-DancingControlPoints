@@ -3,6 +3,8 @@ OpenGL-DancingControlPoints
 
 OpenGL homework with curves
 
+ ![Screenshot](screenshot.png "Screenshot")
+
 Feladat
 ------------
 Készítsen *„Síkon táncoló kontrollpontok”* programot.
@@ -11,9 +13,13 @@ amelyekhez 2cm sugarú kisebb fekete köröket rendelünk.
 
 Ha a kontrollpontok száma legalább kettő,
 azokra egy türkiszkék színű, kitöltött **konvex burkot**,
+
 piros **Bézier görbét**,
+
 nulla kezdő és végsebességű, a kontrollpont lehelyezésének idejét paraméterként használó zöld **Catmull-Rom spline-t**
+
 és kék **Catmull-Clark görbét** illeszt.
+
 
 A háttér világosszürke.
 Legnagyobb prioritása a kontrollpontoknak van, majd a görbék jönnek, végül jön a konvex burok.

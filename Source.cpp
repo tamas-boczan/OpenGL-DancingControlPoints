@@ -142,15 +142,12 @@ const int screenHeight = 600;
 const size_t maxControlPoints = 10;
 const float circleRadius = 2.0;
 
-// színek
 const Color BLACK = Color(0.0f, 0.0f, 0.0f);
 const Color GREY = Color(0.85f, 0.85f, 0.85f);
-// Türkíz szín forrása: www.opengl.org/discussion_boards/showthread.php/132502-Color-tables
-const Color TURQUOISE = Color(0.678f, 0.918f, 0.918f);
-const Color RED = Color(1.0f, 0.0f, 0.0f);
-const Color GREEN = Color(0.0f, 0.6f, 0.1f);
-const Color BLUE = Color(0.0f, 0.0f, 1.0f);
-
+const Color TURQUOISE = Color(0.65f, 0.96f, 0.94f);
+const Color RED = Color(0.5f, 0.0f, 0.0f);
+const Color GREEN = Color(0.0f, 0.5f, 0.0f);
+const Color BLUE = Color(0.0f, 0.0f, 0.5f);
 
 long currentTime;
 long circulationStartTime;
@@ -165,105 +162,25 @@ struct ControlPoint {
     float t;
 };
 
-ControlPoint allControlPoints[maxControlPoints];
-int allControlPointNumber;
-
-class ControlPointList {
-    ControlPoint *controlPoints[maxControlPoints];
-    size_t size;
-
-public:
-
-    ControlPointList(size_t size = 0) : size(size) {
-    }
-
-    ControlPointList(const ControlPointList &c2) {
-        size = c2.size;
-        for (int i = 0; i < size; i++) {
-            controlPoints[i] = c2.controlPoints[i];
-        }
-    }
-
-    ControlPoint *getControlPoint(size_t i) {
-        return controlPoints[i];
-    }
-
-    ControlPoint *getControlPointAtPos(Vector p) {
-        for (int i = 0; i < size; i++) {
-            Vector distance = p - controlPoints[i]->p;
-            if (distance.Length() < circleRadius)
-                return controlPoints[i];
-        }
-        return NULL;
-    }
-
-    void setControlPoint(size_t i, ControlPoint *cp) {
-        controlPoints[i] = cp;
-    }
-
-    Vector getP(size_t i) {
-        return controlPoints[i]->p;
-    }
-
-    void setP(size_t i, Vector Position) {
-        controlPoints[i]->p = Position;
-    }
-
-    Vector getOriginalP(size_t i) {
-        return controlPoints[i]->originalP;
-    }
-
-    void setOriginalP(size_t i, Vector Position) {
-        controlPoints[i]->originalP = Position;
-    }
-
-    float getT(size_t i) {
-        return controlPoints[i]->t;
-    }
-
-    size_t getSize() {
-        return size;
-    }
-
-    void add(ControlPoint *cp) {
-        if (size < maxControlPoints) {
-            controlPoints[size] = cp;
-            size++;
-        }
-    }
-
-    void add(Vector _p, float _t) {
-        if (size < maxControlPoints) {
-            allControlPoints[allControlPointNumber].p = _p;
-            allControlPoints[allControlPointNumber].t = _t;
-            add(allControlPoints + allControlPointNumber);
-            allControlPointNumber++;
-        }
-
-    }
-
-    void removeLastReference() {
-        size--;
-    }
-};
+ControlPoint cp[maxControlPoints];
+size_t cpSize;
 
 class Shape {
 protected:
     static const size_t shapeResolution = 200;
-    ControlPointList *cp;
     Vector shapePoints[shapeResolution + 1];
     size_t shapePointSize;
+    Color color;
 
 public:
-    Shape(ControlPointList *controlPoints) {
-        cp = controlPoints;
+    Shape() {
         shapePointSize = 0;
     }
 
     virtual void computeShape() {
     }
 
-    virtual void drawShape(Color color) {
+    virtual void drawShape() {
         glColor3f(color.r, color.g, color.b);
         glBegin(GL_LINE_STRIP);
         for (size_t i = 0; i < shapePointSize; i++)
@@ -273,100 +190,73 @@ public:
 };
 
 class ConvexHull : public Shape {
-    bool isCounterClockWise(Vector p1, Vector p2, Vector p3) {
-        Vector side1 = p2 - p1;
-        Vector side2 = p3 - p1;
+    bool isClockWise(Vector *p1, Vector *p2, Vector *p3) {
+        Vector side1 = *p2 - *p1;
+        Vector side2 = *p3 - *p1;
         Vector meroleges = side1 % side2;
         float direction = meroleges.z;
         return (direction <= 0.0);
     }
 
-    bool isLeftFrom(Vector v1, Vector v2) {
-        if (v1.x < v2.x)
-            return true;
-        if (v1.x > v2.x)
-            return false;
-        return (v1.y < v2.y);
-    }
+    static int compareVectorsByX(const void *v1, const void *v2) {
+        float x1 = (*(Vector **) v1)->x;
+        float x2 = (*(Vector **) v2)->x;
+        if (x1 != x2)
+            return x1 > x2;
 
-    void sortControlPointsByX(ControlPointList *cpList) {
-        size_t n = cpList->getSize();
-        for (size_t c = 0; c < (n - 1); c++) {
-            for (size_t d = 0; d < n - c - 1; d++) {
-                if (isLeftFrom(cpList->getP(d + 1), cpList->getP(d))) {
-                    ControlPoint *temp = cpList->getControlPoint(d);
-                    cpList->setControlPoint(d, cpList->getControlPoint(d + 1));
-                    cpList->setControlPoint(d + 1, temp);
-                }
-            }
+        else {
+            float y1 = (*(Vector **) v1)->y;
+            float y2 = (*(Vector **) v2)->y;
+            return y1 > y2;
         }
     }
 
+    // Az algoritmust A. M. Andrew publikálta 1979-ben. Az implementációt én csináltam.
     void monotoneChain() {
-        ControlPointList orderedCp(*cp);
-        sortControlPointsByX(&orderedCp);
+        Vector *sortedCp[cpSize];
+        for (size_t i = 0; i < cpSize; i++)
+            sortedCp[i] = &cp[i].p;
+        qsort(sortedCp, cpSize, sizeof(Vector *), compareVectorsByX);
 
-        ControlPointList lowerHull;
-        for (size_t i = 0; i < orderedCp.getSize(); i++) {
-            size_t hullSize = lowerHull.getSize();
-            while (hullSize >= 2 && !isCounterClockWise(lowerHull.getP(hullSize - 2), lowerHull.getP(hullSize - 1), orderedCp.getP(i))) {
-                lowerHull.removeLastReference();
-                hullSize = lowerHull.getSize();
-            }
-            lowerHull.add(orderedCp.getControlPoint(i));
+        Vector *lowerHull[cpSize];
+        size_t lowerHullSize = 0;
+        for (size_t i = 0; i < cpSize; i++) {
+            while (lowerHullSize >= 2
+                    && isClockWise(lowerHull[lowerHullSize - 2], lowerHull[lowerHullSize - 1], sortedCp[i]))
+                lowerHullSize--;
+            lowerHull[lowerHullSize++] = sortedCp[i];
         }
 
-        /*
-        for i = n, n-1, ..., 1:
-        while U contains at least two points and the sequence of last two points
-                of U and the point P[i] does not make a counter-clockwise turn:
-            remove the last point from U
-        append P[i] to U
-         */
-        ControlPointList upperHull;
-        for (size_t i = orderedCp.getSize() - 1; i > 0; i--) {
-            size_t hullSize = upperHull.getSize();
-            while (hullSize >= 2 && !isCounterClockWise(upperHull.getP(hullSize - 2), upperHull.getP(hullSize - 1), orderedCp.getP(i))) {
-                upperHull.removeLastReference();
-                hullSize = upperHull.getSize();
-            }
-            upperHull.add(orderedCp.getControlPoint(i));
+        Vector *upperHull[cpSize];
+        size_t upperHullSize = 0;
+        for (int i = (int) (cpSize - 1); i >= 0; i--) {
+            while (upperHullSize >= 2
+                    && isClockWise(upperHull[upperHullSize - 2], upperHull[upperHullSize - 1], sortedCp[i]))
+                upperHullSize--;
+            upperHull[upperHullSize++] = sortedCp[i];
         }
 
-        /*
-        Remove the last point of each list (it's the same as the first point of the other list).
-        Concatenate L and U to obtain the convex hull of P.
-        Points in the result will be listed in counter-clockwise order.
-         */
-        if (lowerHull.getControlPoint(lowerHull.getSize() - 1) ==
-                upperHull.getControlPoint(0))
-            lowerHull.removeLastReference();
-
-        if (upperHull.getControlPoint(upperHull.getSize() - 1) ==
-                lowerHull.getControlPoint(0))
-            upperHull.removeLastReference();
+        lowerHullSize--;
+        upperHullSize--;
 
         shapePointSize = 0;
-        for (size_t i = 0; i < lowerHull.getSize(); i++) {
-            shapePoints[shapePointSize] = lowerHull.getP(i);
-            shapePointSize++;
-        }
-        for (size_t i = 0; i < upperHull.getSize(); i++) {
-            shapePoints[shapePointSize] = upperHull.getP(i);
-            shapePointSize++;
-        }
+        for (size_t i = 0; i < lowerHullSize; i++)
+            shapePoints[shapePointSize++] = *lowerHull[i];
+
+        for (size_t i = 0; i < upperHullSize; i++)
+            shapePoints[shapePointSize++] = *upperHull[i];
     }
 
 public:
-    ConvexHull(ControlPointList *controlPointList)
-            : Shape(controlPointList) {
+    ConvexHull() : Shape() {
+        color = TURQUOISE;
     }
 
     void computeShape() {
         monotoneChain();
     }
 
-    void drawShape(Color color) {
+    void drawShape() {
         glColor3f(color.r, color.g, color.b);
         glBegin(GL_TRIANGLE_FAN);
         for (size_t i = 0; i < shapePointSize; i++)
@@ -382,20 +272,20 @@ class CatmullRomSpline : public Shape {
     Vector startV;
     Vector endV;
 
-    Vector getAi0(size_t prev) {
-        return cp->getP(prev);
+    Vector a0(size_t prev) {
+        return cp[prev].p;
     }
 
-    Vector getAi1(size_t prev) {
+    Vector a1(size_t prev) {
         return v[prev];
     }
 
-    Vector getAi2(size_t prev) {
+    Vector a2(size_t prev) {
         size_t i = prev;
-        Vector p0 = cp->getP(i);
-        Vector p1 = cp->getP(i + 1);
-        float t0 = cp->getT(i);
-        float t1 = cp->getT(i + 1);
+        Vector p0 = cp[i].p;
+        Vector p1 = cp[i + 1].p;
+        float t0 = cp[i].t;
+        float t1 = cp[i + 1].t;
         Vector tag1 = (p1 - p0) * 3
                 / pow(t1 - t0, 2);
         Vector tag2 = (v[i + 1] + v[i] * 2)
@@ -404,12 +294,12 @@ class CatmullRomSpline : public Shape {
         return tag1 - tag2;
     }
 
-    Vector getAi3(size_t prev) {
+    Vector a3(size_t prev) {
         size_t i = prev;
-        Vector p0 = cp->getP(i);
-        Vector p1 = cp->getP(i + 1);
-        float t0 = cp->getT(i);
-        float t1 = cp->getT(i + 1);
+        Vector p0 = cp[i].p;
+        Vector p1 = cp[i + 1].p;
+        float t0 = cp[i].t;
+        float t1 = cp[i + 1].t;
         Vector tag1 = (p0 - p1) * 2
                 / pow(t1 - t0, 3);
         Vector tag2 = (v[i + 1] + v[i])
@@ -419,24 +309,23 @@ class CatmullRomSpline : public Shape {
     }
 
 public:
-    CatmullRomSpline(ControlPointList *controlPointList)
-            : Shape(controlPointList)    // Call the superclass constructor in the subclass' initialization list.
-    {
+    CatmullRomSpline() : Shape() {
         startV = Vector(0.00001, 0.00001, 0.0);
         endV = Vector(0.00001, 0.00001, 0.0);
         pointsBetweenControlPoints = shapeResolution / maxControlPoints;
+        color = GREEN;
     }
 
-    void ComputeV() {
+    void computeV() {
         v[0] = startV;
-        v[cp->getSize() - 1] = endV;
-        for (size_t i = 1; i < cp->getSize() - 1; i++) {
-            Vector p0 = cp->getP(i);
-            Vector pp1 = cp->getP(i + 1);
-            Vector pm1 = cp->getP(i - 1);
-            float t0 = cp->getT(i);
-            float tp1 = cp->getT(i + 1);
-            float tm1 = cp->getT(i - 1);
+        v[cpSize - 1] = endV;
+        for (size_t i = 1; i < cpSize - 1; i++) {
+            Vector p0 = cp[i].p;
+            Vector pp1 = cp[i + 1].p;
+            Vector pm1 = cp[i - 1].p;
+            float t0 = cp[i].t;
+            float tp1 = cp[i + 1].t;
+            float tm1 = cp[i - 1].t;
 
             Vector tag1 = (pp1 - p0) / (tp1 - t0);
             Vector tag2 = (p0 - pm1) / (t0 - tm1);
@@ -444,14 +333,14 @@ public:
         }
     }
 
-    Vector GetPos(float t, size_t prevIndex) {
+    Vector getPos(float t, size_t prevIndex) {
         size_t i = prevIndex;
-        Vector ai0 = getAi0(i);
-        Vector ai1 = getAi1(i);
-        Vector ai2 = getAi2(i);
-        Vector ai3 = getAi3(i);
+        Vector ai0 = a0(i);
+        Vector ai1 = a1(i);
+        Vector ai2 = a2(i);
+        Vector ai3 = a3(i);
 
-        float t0 = cp->getT(i);
+        float t0 = cp[i].t;
 
         return ai3 * pow(t - t0, 3)
                 + ai2 * pow(t - t0, 2)
@@ -460,103 +349,90 @@ public:
     }
 
     void computeShape() {
-        size_t cpSize = cp->getSize();
         unsigned points = pointsBetweenControlPoints;
         shapePointSize = 0;
 
-        ComputeV();
+        computeV();
         for (size_t i = 0; i < cpSize - 1; i++)
             for (size_t j = i * points; j < (i + 1) * points; j++) {
-                float t = cp->getT(i) + (
-                        ((cp->getT(i + 1) - cp->getT(i)) / (float) points) * (j - (i * (float) points))
+                float t = cp[i].t + (
+                        ((cp[i + 1].t - cp[i].t) / (float) points) * (j - (i * (float) points))
                 );
-                shapePoints[j] = GetPos(t, i);
+                shapePoints[j] = getPos(t, i);
                 shapePointSize = j + 1;
             }
     }
 };
 
 class BezierCurve : public Shape {
-    // t = [0-1] tartomany kozott, i=m=kpMax-1
-    Vector getPos(float t, size_t i, size_t m) {
-        if (m == 0)
-            return cp->getP(i);
+    float B (int i, float t) {
+        int n = (int) (cpSize - 1);
+        float choose = 1;
+        for (int j = 1; j <= i; j++)
+            choose *=(float) (n - j + 1) / j;
+        return (float) (choose * pow(t, i) * pow(1 - t, n - i));
+    }
 
-        return getPos(t, i - 1, m - 1) * t +
-                getPos(t, i, m - 1) * (1.0 - t);
+    Vector r (float t) {
+        Vector rr(0, 0);
+        for (int i = 0; i < cpSize; i++)
+            rr = rr + cp[i].p * B(i, t);
+        return rr;
     }
 
 public:
-    BezierCurve(ControlPointList *controlPointList)
-            : Shape(controlPointList) {
+    BezierCurve() : Shape() {
+        color = RED;
     };
 
-    Vector GetPos(float t) {
-        return getPos(t, cp->getSize() - 1, cp->getSize() - 1);
-    }
-
     void computeShape() {
-        float firstT = cp->getT(0);
-        float lastT = cp->getT(cp->getSize() - 1);
-        float range = lastT - firstT;
-        size_t i = 0;
-        for (float t = firstT; t < lastT; t += range / (float) shapeResolution) {
-            float t1 = (t - firstT) / range;
-            shapePoints[i] = GetPos(t1);
-            shapePointSize = i;
-            i++;
+        float range = cp[cpSize - 1].t - cp[0].t;
+        shapePointSize = 0;
+        for (float t = cp[0].t; t < cp[cpSize - 1].t; t += range / (float) shapeResolution) {
+            float t1 = (t - cp[0].t) / range;
+            shapePoints[shapePointSize++] = r(t1);
         }
     }
-
 };
 
 class CatmullClarkCurve : public Shape {
-    Vector halfSegment(Vector p1, Vector p2){
+    Vector halfSegment(Vector p1, Vector p2) {
         return (p1 + p2) / 2.0;
     }
 
-    Vector centroidOfTriangle (Vector p1, Vector p2, Vector p3, float weightP1 = 0.3333, float weightP2 = 0.3333, float weightP3 = 0.3333){
+    Vector centroidOfTriangle(Vector p1, Vector p2, Vector p3, float weightP1 = 0.3333, float weightP2 = 0.3333, float weightP3 = 0.3333) {
         return p1 * weightP1 + p2 * weightP2 + p3 * weightP3;
     }
 
-    void copyArray(Vector from[], size_t fromSize, Vector to[], size_t * toSize){
+    void copyArray(Vector from[], size_t fromSize, Vector to[], size_t *toSize) {
         for (size_t i = 0; i < fromSize; i++)
             to[i] = from[i];
         *toSize = fromSize;
     }
 
-    void computeSegmentHalves(Vector *oldCurve, size_t oldCurveSize, Vector *halves){
+    void computeSegmentHalves(Vector *oldCurve, size_t oldCurveSize, Vector *halves) {
         for (size_t i = 1; i < oldCurveSize; i++)
             halves[i - 1] = halfSegment(oldCurve[i - 1], oldCurve[i]);
     }
 
-    void computeCentroids(Vector oldCurve[], size_t oldCurveSize, Vector halves[], Vector centroids[]){
+    void computeCentroids(Vector oldCurve[], size_t oldCurveSize, Vector halves[], Vector centroids[]) {
         size_t halvesSize = oldCurveSize - 1;
-        // az 1. és utolsó pont nem változik
         centroids[0] = oldCurve[0];
         centroids[oldCurveSize - 1] = oldCurve[oldCurveSize - 1];
-        //  az 1. háromszög: halves[0], oldCurve[1], halves[1]
-        // utolsó háromszög: halves[oldCurveSize - 3], oldCurve[oldCurveSize - 2], halves[oldCurveSize - 2]
         for (size_t i = 1; i < halvesSize; i++)
             centroids[i] = centroidOfTriangle(halves[i - 1], oldCurve[i], halves[i], 0.25, 0.5, 0.25);
     }
 
-    // két tömböt össze-merge-el, egyszer az elsőből vesz elemet, aztán a másikból
-    void mergeAlternating(Vector arr1[], size_t arr1Size, Vector arr2[], size_t arr2Size, Vector newArr[]){
-        // arr1: centroids, oldCurveSize
-        // arr2: halves, halvesSize
-        // 0 -> newCurveSize - 1 = oldCurveSize  * 2 - 2
+    void mergeAlternating(Vector arr1[], size_t arr1Size, Vector arr2[], size_t arr2Size, Vector newArr[]) {
         for (size_t i = 0; i < arr1Size; i++)
             newArr[2 * i] = arr1[i];
-        // 1 -> newCurveSize - 2 = oldCurveSize * 2 - 3
         for (size_t i = 0; i < arr2Size; i++)
             newArr[2 * i + 1] = arr2[i];
     }
 
 public:
-    CatmullClarkCurve(ControlPointList *controlPointList)
-            : Shape(controlPointList) {
-        shapePointSize = 0;
+    CatmullClarkCurve() : Shape() {
+        color = BLUE;
     };
 
     void computeShape() {
@@ -565,33 +441,25 @@ public:
         size_t newCurveSize;
         size_t oldCurveSize;
 
-        // a new curve-öt a kontrollpontokra inicializálja
-        newCurveSize = cp->getSize();
-        for (size_t i = 0; i < cp->getSize(); i++)
-            newCurve[i] = cp->getP(i);
+        newCurveSize = cpSize;
+        for (size_t i = 0; i < cpSize; i++)
+            newCurve[i] = cp[i].p;
 
         while (newCurveSize < shapeResolution / 2) {
-            // átmásolja newCurve-öt oldCurve-be
             copyArray(newCurve, newCurveSize, oldCurve, &oldCurveSize);
 
-            // kiszámítja az old Curve szakaszainak felezőpontjait, 1-el kevesebb felezőpont van, mint pont.
             size_t halvesSize = oldCurveSize - 1;
             Vector halves[halvesSize];
             computeSegmentHalves(oldCurve, oldCurveSize, halves);
 
-            // kiszámítja, hová kell eltolni az old Curve pontjait, hogy a háromszög súlypontjába kerüljenek
             Vector centroids[oldCurveSize];
             computeCentroids(oldCurve, oldCurveSize, halves, centroids);
 
-            // merge: centroids + halves
             mergeAlternating(centroids, oldCurveSize, halves, halvesSize, newCurve);
             newCurveSize = oldCurveSize + halvesSize;
         }
-
-        // lecseréli shapePoints-ot newCurve-re
         copyArray(newCurve, newCurveSize, shapePoints, &shapePointSize);
     }
-
 };
 
 class Camera {
@@ -637,21 +505,37 @@ public:
 
 } camera;
 
-ControlPointList currentControlPoints;
+void addControlPoint(Vector p, float t) {
+    if (cpSize < maxControlPoints) {
+        cp[cpSize].p = p;
+        cp[cpSize].originalP = p;
+        cp[cpSize].t = t;
+        cpSize++;
+    }
+}
+
+ControlPoint *getControlPointAtPos(Vector p) {
+    for (size_t i = 0; i < cpSize; i++) {
+        Vector distance = p - cp[i].p;
+        if (distance.Length() < circleRadius)
+            return &cp[i];
+    }
+    return NULL;
+}
+
 ControlPoint *followedControlPoint;
 Vector followStartPoint;
-ConvexHull convexHull(&currentControlPoints);
-CatmullRomSpline crSpline(&currentControlPoints);
-BezierCurve bezier(&currentControlPoints);
-CatmullClarkCurve clark(&currentControlPoints);
+ConvexHull convexHull;
+CatmullRomSpline crSpline;
+BezierCurve bezier;
+CatmullClarkCurve clark;
 Shape *shapes[4] = {&convexHull, &crSpline, &bezier, &clark};
 
 // Inicializacio, a program futasanak kezdeten, az OpenGL kontextus letrehozasa utan hivodik meg (ld. main() fv.)
 void onInitialization() {
     glViewport(0, 0, screenWidth, screenHeight);
     currentSate = ADDING_POINTS;
-    allControlPointNumber = 0;
-
+    cpSize = 0;
 }
 
 void drawCircle(Vector Center, float radius) {
@@ -674,23 +558,22 @@ void moveControlPoints(float ts, long circulationStartTime) {
     double Pi = 3.14159;
     if (ts < circulationStartTime)
         ts = circulationStartTime;
-    // azért adjuk hozzá, hogy a kör tetejéről induljon a periódus, a periódus 1/4-edénél van a kör tetején.
     ts += 0.25 * period;
     double periodsDone = floor((ts - circulationStartTime) / period);
     double timePastInPeriod = ts - circulationStartTime - (periodsDone * period);
     double periodPart = timePastInPeriod / period;
     double angle = 2 * Pi * periodPart;
 
-    for (size_t i = 0; i < currentControlPoints.getSize(); i += 2) {
-        float newX = (float) (currentControlPoints.getOriginalP(i).x - radius * cos(angle));
-        float newY = (float) (currentControlPoints.getOriginalP(i).y + radius * sin(angle) - radius);
-        currentControlPoints.setP(i, Vector(newX, newY));
+    for (size_t i = 0; i < cpSize; i += 2) {
+        float newX = (float) (cp[i].originalP.x - radius * cos(angle));
+        float newY = (float) (cp[i].originalP.y + radius * sin(angle) - radius);
+        cp[i].p = Vector(newX, newY);
     }
 
-    for (size_t i = 1; i < currentControlPoints.getSize(); i += 2) {
-        float newX = (float) (currentControlPoints.getOriginalP(i).x + radius * cos(angle));
-        float newY = (float) (currentControlPoints.getOriginalP(i).y + radius * sin(angle) - radius);
-        currentControlPoints.setP(i, Vector(newX, newY));
+    for (size_t i = 1; i < cpSize; i += 2) {
+        float newX = (float) (cp[i].originalP.x + radius * cos(angle));
+        float newY = (float) (cp[i].originalP.y + radius * sin(angle) - radius);
+        cp[i].p = Vector(newX, newY);
     }
 }
 
@@ -699,9 +582,8 @@ void SimulateWorld(float tstart, float tend) {
     if (currentSate == CIRCULATE || currentSate == CAMERA_MOVING)
         for (float ts = tstart; ts < tend; ts += dt) {
             moveControlPoints(ts, circulationStartTime);
-
-            if (currentControlPoints.getSize() >= 2)
-                for (int i = 0; i < 4; i++)
+            if (cpSize >= 2)
+                for (size_t i = 0; i < 4; i++)
                     shapes[i]->computeShape();
         }
 
@@ -719,21 +601,19 @@ void onDisplay() {
     gluOrtho2D(camera.left(), camera.right(), camera.bottom(), camera.top());
 
 
-    if (currentControlPoints.getSize() >= 2) {
-        convexHull.drawShape(TURQUOISE);
-        crSpline.drawShape(GREEN);
-        bezier.drawShape(RED);
-        clark.drawShape(BLUE);
+    if (cpSize >= 2) {
+        for (size_t i = 0; i < 4; i++)
+            shapes[i]->drawShape();
 
         glColor3f(BLACK.r, BLACK.g, BLACK.b);
-        for (size_t i = 0; i < currentControlPoints.getSize(); i++)
-            drawCircle(currentControlPoints.getP(i), circleRadius);
+        for (size_t i = 0; i < cpSize; i++)
+            drawCircle(cp[i].p, circleRadius);
     }
 
     else {
         glColor3f(BLACK.r, BLACK.g, BLACK.b);
-        for (size_t i = 0; i < currentControlPoints.getSize(); i++)
-            drawCircle(currentControlPoints.getP(i), circleRadius);
+        for (size_t i = 0; i < cpSize; i++)
+            drawCircle(cp[i].p, circleRadius);
     }
 
     glutSwapBuffers();                    // Buffercsere: rajzolas vege
@@ -742,15 +622,9 @@ void onDisplay() {
 
 // Billentyuzet esemenyeket lekezelo fuggveny (lenyomas)
 void onKeyboard(unsigned char key, int x, int y) {
-    // space-re elindítjuk a keringést, de csak ha még a keringés előtti állapotban vagyunk
-    // amúgy nem törődünk a Space-el
-    if (key == ' ') {
-        if (currentSate == ADDING_POINTS) {
-            circulationStartTime = glutGet(GLUT_ELAPSED_TIME);
-            for (size_t i = 0; i < currentControlPoints.getSize(); i++)
-                currentControlPoints.setOriginalP(i, currentControlPoints.getP(i));
-            currentSate = CIRCULATE;
-        }
+    if (key == ' ' && currentSate == ADDING_POINTS) {
+        circulationStartTime = glutGet(GLUT_ELAPSED_TIME);
+        currentSate = CIRCULATE;
     }
 }
 
@@ -761,29 +635,22 @@ void onKeyboardUp(unsigned char key, int x, int y) {
 
 // Eger esemenyeket lekezelo fuggveny
 void onMouse(int button, int state, int x, int y) {
-    if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN) {
+    if (button == GLUT_LEFT_BUTTON && state == GLUT_UP && currentSate == ADDING_POINTS) {
         long clickTime = glutGet(GLUT_ELAPSED_TIME);
-
-        // felvesz egy új kontrollpontot és újraszámolja a görbét, de csak a pontfelvétel állapotában, ha még nem értük el a maxot
-        if (currentSate == ADDING_POINTS) {
-            Vector pos = camera.getWorldPos(x, y, screenWidth, screenHeight);
-            if (currentControlPoints.getSize() < maxControlPoints) {
-                currentControlPoints.add(pos, clickTime / 1000.0f);
-                if (currentControlPoints.getSize() >= 2) {
-                    for (int i = 0; i < 4; i++)
-                        shapes[i]->computeShape();
-                }
-
-                glutPostRedisplay();
-            }
+        Vector pos = camera.getWorldPos(x, y, screenWidth, screenHeight);
+        if (cpSize < maxControlPoints) {
+            addControlPoint(pos, clickTime / 1000.0f);
+            if (cpSize >= 2)
+                for (size_t i = 0; i < 4; i++)
+                    shapes[i]->computeShape();
+            glutPostRedisplay();
         }
     }
 
     if (button == GLUT_RIGHT_BUTTON && state == GLUT_DOWN) {
-        // elindítja a kamerát,
         if (currentSate == CIRCULATE || currentSate == CAMERA_MOVING) {
             Vector pos = camera.getWorldPos(x, y, screenWidth, screenHeight);
-            ControlPoint *clickedControlPoint = currentControlPoints.getControlPointAtPos(pos);
+            ControlPoint *clickedControlPoint = getControlPointAtPos(pos);
             if (clickedControlPoint != NULL) {
                 followedControlPoint = clickedControlPoint;
                 followStartPoint = clickedControlPoint->p;
